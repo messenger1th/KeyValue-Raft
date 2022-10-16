@@ -9,7 +9,7 @@
 using namespace std;
 
 int main() {
-    Master master(2, 2, 2);
+    Master master(2, 2, 10);
 
     int port = 5555;
     buttonrpc server;

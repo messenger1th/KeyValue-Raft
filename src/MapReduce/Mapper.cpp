@@ -13,8 +13,6 @@ WordCounter::WordCounter(size_t id): id(id) {}
 
 void WordCounter::map(const std::string &key, const std::string &value) {
     std::unordered_map<std::string, size_t> frequency;
-    cout << value.size() << endl;
-
     const size_t  n = value.size();
     for (size_t i = 0; i < n; ) {
         /* skip past leading whitespace */
@@ -32,6 +30,8 @@ void WordCounter::map(const std::string &key, const std::string &value) {
     assert(key.find('_') != string::npos);
     string output_file = "map_result_" + key.substr(key.rfind('_') + 1);
     writer.open(output_file);
+    assert(writer.is_open());
+
     for (const auto& p : frequency) {
         const auto k = p.first;
         const auto freq = p.second;
@@ -39,7 +39,6 @@ void WordCounter::map(const std::string &key, const std::string &value) {
     }
     writer.flush();
     writer.close();
-    cout << frequency.size() << endl;
 }
 
 
@@ -59,7 +58,7 @@ void WordCounter::start_work() {
         this->map(task_name, string(std::istreambuf_iterator<char>(reader), std::istreambuf_iterator<char>()));
         reader.close();
         printf("Mapper: %d finished map task: %s\n", this->id, task_name.c_str());
-        client.call<void>("map_task_done", this->id, this->id);
+        client.call<void>("map_task_done", this->id, stoul(task_name.substr(task_name.rfind('_') + 1)));
     }
 
 }

@@ -11,8 +11,10 @@ Master::Master(size_t mapper_count, size_t reducer_count, size_t total_map_task_
     mapper_count(mapper_count),
     reducer_count(reducer_count),
     total_map_task_count(total_map_task_count) {
+
+
     string task_prefix = "map_task_";
-    for (size_t i = 0; i < mapper_count; ++i) {
+    for (size_t i = 0; i < total_map_task_count; ++i) {
         map_tasks.emplace(task_prefix + to_string(i));
     }
 }
