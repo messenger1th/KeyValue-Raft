@@ -8,6 +8,8 @@
 #include <cstdio>
 #include <string>
 #include <queue>
+#include <condition_variable>
+
 
 constexpr size_t default_map_task = 10;
 
@@ -21,7 +23,7 @@ public:
 
 
     /* called by reducer */
-    std::string assign_reduce_task();
+    std::string assign_reduce_task(size_t id);
     void reduce_task_done();
 
 
@@ -34,8 +36,13 @@ private:
     size_t map_task_done_count;
     size_t total_map_task_count = default_map_task;
 
+    std::mutex map_done_mutex;
+    std::unique_lock<std::mutex> map_done_lock;
+    std::condition_variable map_done;
+
     size_t reducer_count;
     std::queue<std::string> reduce_tasks;
+
 };
 
 

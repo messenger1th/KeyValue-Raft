@@ -10,9 +10,9 @@
 Master::Master(size_t mapper_count, size_t reducer_count, size_t total_map_task_count) :
     mapper_count(mapper_count),
     reducer_count(reducer_count),
-    total_map_task_count(total_map_task_count) {
-
-
+    total_map_task_count(total_map_task_count),
+    map_done_lock(map_done_mutex)
+    {
     string task_prefix = "map_task_";
     for (size_t i = 0; i < total_map_task_count; ++i) {
         map_tasks.emplace(task_prefix + to_string(i));
@@ -35,8 +35,21 @@ void Master::map_task_done(size_t mapper_id, size_t map_task_id) {
     ++map_task_done_count;
     if (map_task_done_count == total_map_task_count) {
         //TODO: set reduce task is running & Notice the reducer.
+        map_done_lock.unlock();
+        map_done.notify_all();
         cout << "map task done!" << endl;
     }
+}
+
+std::string Master::assign_reduce_task(size_t id) {
+    unique_lock<std::mutex> temp;
+    map_done.wait(temp, [] () {
+       return
+    });
+}
+
+void Master::reduce_task_done() {
+
 }
 
 
