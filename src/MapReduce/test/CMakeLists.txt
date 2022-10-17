@@ -1,4 +1,4 @@
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/src/MapReduce/test)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin/MapReduce/)
 
 add_executable(test_master test_master.cpp ../Master.cpp)
 add_executable(test_mapper test_mapper.cpp ../Mapper.cpp)

@@ -28,13 +28,15 @@ Master::Master(size_t mapper_count, size_t reducer_count, size_t total_map_task_
 }
 
 std::string Master::assign_map_task(size_t mapper_id) {
+    if (map_tasks.empty() || current_state != mapping) {
+        return "";
+    }
+
     state_change.wait(mapping_lock, [this] () {
        return this->current_state  == mapping;
     });
 
-    if (map_tasks.empty()) {
-        return "";
-    }
+
     printf("Mapper: %d is calling assigning map work! \n", mapper_id);
     string task_name = map_tasks.front(); map_tasks.pop();
     return task_name;
@@ -59,10 +61,69 @@ void Master::shuffle() {
         return this->current_state == shuffling;
     });
     cout << " Shuffling " << endl;
-    //TODO shuffle
+
+    string input_prefix = "map_result_";
+    string intermediate_prefix = "reduce_unordered_task_";
+
+    ifstream reader;
+    vector<ofstream> writers(this->reducer_count);
+
+    for (int i = 0; i < writers.size(); ++i) {
+        writers[i].open(intermediate_prefix + to_string(i));
+        assert(writers[i].is_open());
+    }
+
+
+    hash<std::string>   reduce_task_separator;
+    for (int i = 0; i < total_map_task_count; ++i) {
+        string input_name = input_prefix + to_string(i);
+        reader.open(input_name);
+        assert(reader.is_open());
+
+        string kv;
+
+        while (std::getline(reader, kv)) {
+            auto pos = kv.find(':');
+            const string& key = kv.substr(0, pos);
+            size_t task_number = reduce_task_separator(key) % this->reducer_count;
+            writers[task_number] << kv << '\n';
+        }
+        reader.close();
+    }
+    
+    for_each(writers.begin(), writers.end(), [] (auto& writer) {
+        writer.close();
+    });
+    
+    string output_prefix = "reduce_task_";
+    ofstream writer;
+    for (int i = 0; i < this->reducer_count; ++i) {
+        /* read from intermediate file */
+        string intermediate_name = intermediate_prefix + to_string(i);
+        vector<string> key_values;
+        string one_line;
+        reader.open(intermediate_name); assert(reader.is_open());
+        while (std::getline(reader, one_line)) {
+            key_values.emplace_back(one_line);
+        }
+        reader.close();
+
+        /* use external sort  when data is over size */
+        sort(key_values.begin(), key_values.end());
+
+        /*after sort, output to the reduce input*/
+        string output_name = output_prefix + to_string(i);
+        writer.open(output_name); assert(writer.is_open());
+        for (const auto& kv: key_values) {
+            writer << kv << '\n';
+        }
+        writer.close();
+    }
+        
     change_state(shuffling_lock, reducing, reducing_lock);
-    cout << (current_state == reducing) << endl;
 }
+
+
 
 
 std::string Master::assign_reduce_task(size_t id) {
