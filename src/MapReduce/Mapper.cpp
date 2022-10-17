@@ -60,6 +60,7 @@ void WordCounter::start_work() {
         printf("Mapper: %d finished map task: %s\n", this->id, task_name.c_str());
         client.call<void>("map_task_done", this->id, stoul(task_name.substr(task_name.rfind('_') + 1)));
     }
-
+    cout << "treat : " << client.call<std::string>("assign_reduce_task", this->id).val() << endl;
+    exit(0);
 }
 

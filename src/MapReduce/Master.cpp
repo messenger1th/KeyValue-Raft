@@ -61,10 +61,13 @@ void Master::shuffle() {
     cout << " Shuffling " << endl;
     //TODO shuffle
     change_state(shuffling_lock, reducing, reducing_lock);
+    cout << (current_state == reducing) << endl;
 }
 
 
 std::string Master::assign_reduce_task(size_t id) {
+    printf("Reducer: %d is calling assigning reduce work! \n", id);
+
     state_change.wait(reducing_lock, [this] () {
        return this->current_state == reducing;
     });
