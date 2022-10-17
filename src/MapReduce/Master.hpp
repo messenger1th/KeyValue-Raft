@@ -72,8 +72,6 @@ private:
         new_lock.lock();
         state_change.notify_all();
     }
-
-
 };
 
 

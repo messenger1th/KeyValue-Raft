@@ -3,8 +3,7 @@
 //
 
 #include "Master.hpp"
-//TODO delete this head file <bits/stdc++.h>
-#include <bits/stdc++.h>
+#include <fstream>
 #include "buttonrpc.hpp"
 
 Master::Master(size_t mapper_count, size_t reducer_count, size_t total_map_task_count,
@@ -108,10 +107,10 @@ void Master::shuffle() {
         }
         reader.close();
 
-        /* use external sort  when data is over size */
+        /* use external sort when data is over size */
         sort(key_values.begin(), key_values.end());
 
-        /*after sort, output to the reduce input*/
+        /* after sort, output to the reduce input */
         string output_name = output_prefix + to_string(i);
         writer.open(output_name); assert(writer.is_open());
         for (const auto& kv: key_values) {

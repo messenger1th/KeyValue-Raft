@@ -13,7 +13,6 @@ void WordAdder::reduce(const std::string& key, const std::list<std::string>& val
         count += stoul(value);
     }
     write_disk(key, count);
-    reader.close();
 }
 
 WordAdder::WordAdder(size_t id): id(id) {}
@@ -27,7 +26,7 @@ void WordAdder::start_work() {
     string task_name = client.call<std::string>("assign_reduce_task", this->id).val();
     while (task_name == "") {
         task_name = client.call<std::string>("assign_reduce_task", this->id).val();
-        sleep(4);
+        sleep(1);
     }
     printf("Reducer: %d is Reducing... task: %s\n", this->id, task_name.c_str());
     reader.open(task_name);
@@ -45,7 +44,6 @@ void WordAdder::start_work() {
             key = next_key;
             values.clear();
         }
-        cout << next_key << endl;
         values.emplace_back(next_line.substr(pos + 1));
     }
     printf("Reducer: %d done task: %s\n", this->id, task_name.c_str());
