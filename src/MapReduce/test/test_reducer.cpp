@@ -11,7 +11,8 @@
 using namespace std;
 
 int main(int argc, const char* argv[]) {
-    WordAdder reducer(0);
+    int id = argc < 2 ? 0 : stoi(argv[1]);
+    WordAdder reducer(id);
     reducer.start_work();
 }
 

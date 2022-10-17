@@ -127,6 +127,10 @@ void Master::shuffle() {
 
 
 std::string Master::assign_reduce_task(size_t id) {
+    if (current_state != reducing) {
+        return "";
+    }
+
     printf("Reducer: %d is calling assigning reduce work! \n", id);
 
     state_change.wait(reducing_lock, [this] () {
@@ -141,7 +145,8 @@ void Master::reduce_task_done(size_t id, size_t task_id) {
     ++reduce_task_done_count;
     if (reduce_task_done_count == total_reduce_task_count) {
         change_state(reducing_lock, finalizing, finalizing_lock);
-        cout << "map task done!" << endl;
+        cout << "Reduce task done!" << endl;
+        finalize();
     }
 }
 

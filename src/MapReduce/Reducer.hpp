@@ -11,7 +11,7 @@
 #include <fstream>
 
 class Reducer {
-    virtual void reduce(const std::string, const std::list<std::string>) = 0;
+    virtual void reduce(const std::string&, const std::list<std::string>&) = 0;
 };
 
 
@@ -19,9 +19,10 @@ class WordAdder: public Reducer {
 public:
     WordAdder(size_t id);
     void start_work();
-    void reduce(const std::string key, const std::list<std::string> values) override;
+    void reduce(const std::string& key, const std::list<std::string>& values) override;
 
 private:
+    void write_disk(const std::string& key, const size_t& value);
     std::ofstream writer;
     std::ifstream reader;
     size_t id;
