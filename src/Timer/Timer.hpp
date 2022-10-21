@@ -10,6 +10,10 @@
 #include <thread>
 #include <functional>
 
+
+#include <iostream>
+using std::cout,std::endl;
+
 template<typename Precision>
 class Timer {
 public:
@@ -22,10 +26,10 @@ public:
     }
 
     //TODO add multi parameter extensions.
-    void start(std::function<void(void)> f) {
+    void start() {
         reset();
         this->pause = false;
-        std::thread t(this->operate, f);
+        std::thread t(&Timer::operate, this);
         t.detach();
     }
 
@@ -50,14 +54,15 @@ private:
 
 private:
     //TODO: iterate it for multi parameters;
-    void operate(std::function<void(void)> f) {
+    void operate() {
         auto previous_time_point = std::chrono::system_clock::now();
         while (!pause) {
             auto now = std::chrono::system_clock::now();
             remain -= now - previous_time_point;
             if (remain < 0) {
                 reset();
-                f();
+//                f();
+                std::cout << "Hello" << std::endl;
             }
             previous_time_point = now;
             std::this_thread::sleep_for(this->check_interval);
