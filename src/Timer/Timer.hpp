@@ -26,10 +26,11 @@ public:
     }
 
     //TODO add multi parameter extensions.
-    void start(const std::function<void(void)>& f) {
+    template<typename Func, typename... Args>
+    void start(Func&& f, Args&&... args) {
         reset();
         this->pause = false;
-        std::thread t(&Timer::operate, this, f);
+        std::thread t(&Timer::operate, this, std::bind<void>(std::forward<Func>(f), std::forward<Args>(args)...));
         t.detach();
     }
 
@@ -54,7 +55,8 @@ private:
 
 private:
     //TODO: iterate it for multi parameters;
-    void operate(const std::function<void(void )>& f) {
+    template<typename Func>
+    void operate(const Func& f) {
         auto previous_time_point = std::chrono::system_clock::now();
         cout << "I' in " << endl;
         while (!pause) {
