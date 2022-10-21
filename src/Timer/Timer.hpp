@@ -11,12 +11,14 @@
 #include <functional>
 
 
-#include <iostream>
-using std::cout,std::endl;
-
 template<typename Precision>
 class Timer {
 public:
+
+    template<class Period, class IntervalType>
+    Timer(Period&& period, IntervalType&& check_interval):  period(std::forward<Period>(period)),
+                                                            remain(this->period),
+                                                            check_interval(Precision(std::forward<IntervalType>(check_interval))) {}
     Timer(Precision period, Precision check_interval) : period(period), remain(period),
                                                         check_interval(check_interval) {}
 
@@ -25,12 +27,13 @@ public:
         this->pause = true;
     }
 
-    //TODO add multi parameter extensions.
     template<typename Func, typename... Args>
     void start(Func&& f, Args&&... args) {
         reset();
         this->pause = false;
-        std::thread t(&Timer::operate, this, std::bind<void>(std::forward<Func>(f), std::forward<Args>(args)...));
+        /* detect the function type ant pass it the thread constructor */
+        using operation_type = decltype(std::bind<void>(std::forward<Func>(f), std::forward<Args>(args)...));
+        std::thread t(&Timer::operate<operation_type>, this, std::bind<void>(std::forward<Func>(f), std::forward<Args>(args)...));
         t.detach();
     }
 
@@ -54,22 +57,21 @@ private:
     std::atomic<Precision> check_interval;
 
 private:
-    //TODO: iterate it for multi parameters;
+
     template<typename Func>
     void operate(const Func& f) {
         auto previous_time_point = std::chrono::system_clock::now();
-        cout << "I' in " << endl;
         while (!pause) {
             auto now = std::chrono::system_clock::now();
             remain = remain.load() - std::chrono::duration_cast<Precision>(now - previous_time_point);
             if (remain.load() < remain.load().zero()) {
                 reset();
+                /*use  function bounded in function start()*/
                 f();
             }
             previous_time_point = now;
             std::this_thread::sleep_for(this->check_interval.load());
         }
-        cout << "stopped" << endl;
     }
 };
 
