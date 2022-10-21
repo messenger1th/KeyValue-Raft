@@ -4,9 +4,7 @@
 
 #include <iostream>
 #include <chrono>
-#include <atomic>
 #include <thread>
-#include <functional>
 #include "Timer.hpp"
 
 using namespace std;
