@@ -18,18 +18,18 @@ template<typename Precision>
 class Timer {
 public:
     Timer(Precision period, Precision check_interval) : period(period), remain(period),
-                                                                                 check_interval(check_interval) {}
+                                                        check_interval(check_interval) {}
 
     virtual ~Timer() {
-        /* stop the task */
+        /* stop the detached thread */
         this->pause = true;
     }
 
     //TODO add multi parameter extensions.
-    void start() {
+    void start(const std::function<void(void)>& f) {
         reset();
         this->pause = false;
-        std::thread t(&Timer::operate, this);
+        std::thread t(&Timer::operate, this, f);
         t.detach();
     }
 
@@ -54,19 +54,20 @@ private:
 
 private:
     //TODO: iterate it for multi parameters;
-    void operate() {
+    void operate(const std::function<void(void )>& f) {
         auto previous_time_point = std::chrono::system_clock::now();
+        cout << "I' in " << endl;
         while (!pause) {
             auto now = std::chrono::system_clock::now();
-            remain -= now - previous_time_point;
-            if (remain < 0) {
+            remain = remain.load() - std::chrono::duration_cast<Precision>(now - previous_time_point);
+            if (remain.load() < remain.load().zero()) {
                 reset();
-//                f();
-                std::cout << "Hello" << std::endl;
+                f();
             }
             previous_time_point = now;
-            std::this_thread::sleep_for(this->check_interval);
+            std::this_thread::sleep_for(this->check_interval.load());
         }
+        cout << "stopped" << endl;
     }
 };
 
