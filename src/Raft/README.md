@@ -24,10 +24,13 @@ do nothing but response to RPC request like voting  and append entry and reset e
 
 after being a candidate, steps  as follows.
 
-revert to follower state anytime received a valid append entry which means a new leader win the vote. 
+revert to follower state anytime receives a valid append entry which means a new leader win the vote. 
 
 1. set a voting timer, if election timeout, start a new election.
 2. increase  current  term, otherwise voting request will be rejected.
+3. vote for self
+4. reset election timer, start a new election after timeout.
+5. sent `VoteRequest` RPC in parallel, become leader if granted by majority, finish this election before election timer start a new election. 
 
 
 
@@ -38,6 +41,28 @@ revert to follower state anytime received a valid append entry which means a new
 #### Restart: As Candidate
 
 #### Restart: As Leader
+
+
+
+### Add a new Server into Cluster
+
+## Details not Mentioned in Paper
+
+### When to set `voteFor` to `null` ? 
+
+if RPC request or response contains term T > current term,  set it `null`.
+
+when a server receives a `RequestVote` RPC with a term higher than its own, it should update the term to the number observed **and also reset the `votedFor` to `null`** (meaning that in this case, it will always vote for the requesting server).
+
+Link: https://stackoverflow.com/questions/50425312/in-raft-distributed-consensus-what-do-i-set-votedfor-to
+
+
+
+### Will a candidate with huge current term break current term?
+
+Yes, as mentioned above, anytime leader receive a term higher than its current term, will update its term and convert to a follower.
+
+Link: https://stackoverflow.com/questions/71230789/raft-will-term-increasing-all-the-time-if-partitioned
 
 
 

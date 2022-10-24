@@ -4,12 +4,12 @@ set(CMAKE_CXX_STANDARD 17)
 
 include_directories(src)
 include_directories(src/TinyRPC)
-include_directories(str/Timer)
+include_directories(src/Timer)
 
-add_subdirectory(src/Raft Raft)
-add_subdirectory(src/Timer Timer)
 add_subdirectory(src/TinyRPC TinyRPC)
 add_subdirectory(src/MapReduce MapReduce)
+add_subdirectory(src/Timer Timer)
+add_subdirectory(src/Raft Raft)
 
 
 
