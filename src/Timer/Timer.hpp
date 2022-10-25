@@ -84,7 +84,7 @@ Timer<Precision>:: ~Timer() {
 
 template<typename Precision>
 template<class Period>
-Timer<Precision>::Timer(Period &&period) :  period(std::forward<Period>(period)), remain(period), pause_lock(m, std::defer_lock), running_lock(m, std::defer_lock) {}
+Timer<Precision>::Timer(Period &&period) :  period(std::forward<Period>(period)), remain(this->period), pause_lock(m, std::defer_lock), running_lock(m, std::defer_lock) {}
 
 
 template<typename Precision>
@@ -110,12 +110,13 @@ void Timer<Precision>::operate(Func&&  f) {
     while (this->state != State::shutdown) {
         /* waiting signal to start */
         cv.wait(running_lock, [=] () -> bool { return this->state == State::running; });
-        auto start_point = std::chrono::system_clock::now;
-        auto res = cv.wait_for(pause_lock, remain, [=] () -> bool { return this->state == State::pause; });
-        if (res == std::cv_status::timeout) {
-            f();
+        auto start_point = std::chrono::system_clock::now();
+        if (cv.wait_for(pause_lock, remain.load(), [=] () -> bool { return this->state == State::pause; })) {
+            auto tpe = this->remain.load() - (std::chrono::system_clock::now() - start_point;
+            this->remain = this->remain - (std::system_clock::now() - start_point).count();
         } else {
-            remain = remain - (std::chrono::system_clock - start_point);
+            f();
+            this->remain = period;
         }
     }
 }
@@ -132,7 +133,6 @@ using namespace std;
 int main() {
     using ms = std::chrono::milliseconds;
     using sec = std::chrono::seconds;
-    std::atomic<duration::>
     ms s1(ms(1));
     atomic<ms> a(s1);
 

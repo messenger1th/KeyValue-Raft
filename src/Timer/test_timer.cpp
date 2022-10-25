@@ -8,8 +8,3 @@
 #include "Timer.hpp"
 
 using namespace std;
-
-
-
-
-
