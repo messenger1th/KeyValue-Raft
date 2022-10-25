@@ -84,22 +84,31 @@ private:
     size_t last_applied{0};
 
     /* extra information*/
-    std::atomic<State> current_state{State::Follower};
+    size_t majority_count{2};
+    std::atomic<State> state{State::Follower};
 
 private:
-    /* timer */
+    /* election timer relevant property */
     ms election_timer_base{1000};
     ms election_timer_fluctuate{1000};
     Timer<ms> election_timer{2500};
-
+    /* election timer relevant function */
     void start_election_timer();
+
+
+    /* as a leader */
+
 
     /* id -> ip:port */
     size_t id;
+
+    /* connection information of other server */
     std::unordered_map<size_t, NetAddress> other_servers;
     std::unordered_map<size_t, unique_ptr<buttonrpc>> other_server_connections;
 
     /* extra information */
+    std::atomic<size_t> last_log_term{0};
+    std::atomic<size_t> last_log_index{0};
 };
 
 
