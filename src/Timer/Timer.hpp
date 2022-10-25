@@ -9,6 +9,7 @@
 #include <atomic>
 #include <thread>
 #include <functional>
+#include <condition_variable>
 
 
 template<typename Precision>
@@ -17,44 +18,38 @@ public:
 
     /* just pass default period & set check interval as 1/10 of period */
     template<class Period>
-    Timer(Period&& period);
-    
-    /* more readable constructor, just pass the value*/
-    template<class Period, class IntervalType>
-    Timer(Period&& period, IntervalType&& check_interval);
-
-    /* initial constructor, pass by the corresponding type */
-    Timer(Precision period, Precision check_interval);
+    explicit Timer(Period&& period);
 
     /* set stop_flag to true to stop detached thread */
     virtual ~Timer();
 
     /* pass the callback function & its parameters */
     template<typename Func, typename... Args>
-    void start(Func&& f, Args&&... args);
+    void set_callback(Func&& f, Args&&... args);
 
-    inline void stop() {
-        this->stop_flag = true;
+    inline void shutdown() {
+        this->state = State::shutdown;
     }
+
+
+    /* just pass default period & set check interval as 1/10 of period */
+    template<class Period>
+    void reset_period(Period&& period);
 
     inline void reset() {
         this->remain = period;
     }
 
-    inline void puase() {
-        this->puase = true;
+    inline void pause() {
+        running_lock.unlock();
+        this->state = State::pause;
+        cv.notify_one();
     }
 
-    inline void resume() {
-        this->puase = true;
-    }
-
-    inline void reset_check_interval(Precision interval) {
-        this->check_interval = interval;
-    }
-
-    inline void set_once(bool once) {
-        this->once = once;
+    inline void run() {
+        pause_lock.unlock();
+        this->state = State::runing;
+        cv.notify_one();
     }
 
     inline void set_period(Precision period) {
@@ -62,12 +57,18 @@ public:
     }
 
 private:
-    std::atomic<bool> stop_flag{false};
+
+    enum class State{running, pause, shutdown};
+    std::atomic<State> state{State::pause};
     Precision period;
     std::atomic<Precision> remain;
-    std::atomic<Precision> check_interval;
-    std::atomic<bool> once{true};
-    std::atomic<bool> pause{false};
+    std::atomic<bool> once{false};
+
+    /* use for manage timer start & pause */
+    std::mutex m;
+    std::condition_variable cv;
+    std::unique_lock<std::mutex> running_lock;
+    std::unique_lock<std::mutex> pause_lock;
 
 private:
     /* class help functions */
@@ -78,28 +79,24 @@ private:
 template<typename Precision>
 Timer<Precision>:: ~Timer() {
     /* stop the detached thread */
-    this->stop_flag = true;
+    this->state = State::shutdown;
 }
 
 template<typename Precision>
-template<class Period, class IntervalType>
-Timer<Precision>::Timer(Period &&period, IntervalType &&check_interval) :  period(std::forward<Period>(period)),
-                                                                           remain(this->period),
-                                                                           check_interval(Precision(std::forward<IntervalType>(check_interval))) {}
+template<class Period>
+Timer<Precision>::Timer(Period &&period) :  period(std::forward<Period>(period)), remain(period), pause_lock(m, std::defer_lock), running_lock(m, std::defer_lock) {}
 
-template<typename Precision>
-Timer<Precision>::Timer(Precision period, Precision check_interval)  : period(period), remain(period),
 
-                                                                       check_interval(check_interval) {}
 template<typename Precision>
 template<class Period>
-Timer<Precision>::Timer(Period &&period): Timer(period, period / 100) {}
+void Timer<Precision>::reset_period(Period &&period) {
+    this->period = std::forward<Period>(period);
+}
+
 
 template<typename Precision>
 template<typename Func, typename... Args>
-void Timer<Precision>::start(Func &&f, Args &&... args) {
-    reset();
-    this->stop_flag = false;
+void Timer<Precision>::set_callback(Func &&f, Args &&... args) {
     /* detect the function type ant pass it the thread constructor */
     using result_type = decltype(std::bind<void>(std::forward<Func>(f), std::forward<Args>(args)...));
     std::thread t(&Timer::operate<result_type>, this, std::bind<void>(std::forward<Func>(f), std::forward<Args>(args)...));
@@ -110,29 +107,51 @@ template<typename Precision>
 template<typename Func>
 void Timer<Precision>::operate(Func&&  f) {
     auto previous_time_point = std::chrono::system_clock::now();
-    while (!stop_flag) {
-        auto now = std::chrono::system_clock::now();
-        //TODO: optimize it, let the thread sleep until get the lock.
-        if (!pause) {
-            remain = remain.load() - std::chrono::duration_cast<Precision>(now - previous_time_point);
-        }
-        if (remain.load() < remain.load().zero()) {
-            reset();
-
-            /* call function bounded in function start()*/
+    while (this->state != State::shutdown) {
+        /* waiting signal to start */
+        cv.wait(running_lock, [=] () -> bool { return this->state == State::running; });
+        auto start_point = std::chrono::system_clock::now;
+        auto res = cv.wait_for(pause_lock, remain, [=] () -> bool { return this->state == State::pause; });
+        if (res == std::cv_status::timeout) {
             f();
-
-            /* if set once, break this loop and exit this thread. */
-            if (this->once) {
-                break;
-            }
+        } else {
+            remain = remain - (std::chrono::system_clock - start_point);
         }
-        previous_time_point = now;
-        std::this_thread::sleep_for(this->check_interval.load());
     }
 }
 
+class Temp {
+public:
+    void f() {
 
+    }
+};
+
+using namespace std;
+
+int main() {
+    using ms = std::chrono::milliseconds;
+    using sec = std::chrono::seconds;
+    std::atomic<duration::>
+    ms s1(ms(1));
+    atomic<ms> a(s1);
+
+    Timer<ms> timer(1000);
+
+    Temp t;
+    timer.set_callback(&Temp::f, t);
+    std::this_thread::sleep_for(sec (3));
+
+    timer.pause();
+
+    this_thread::sleep_for(sec (3));
+
+    this_thread::sleep_for(sec (3));
+
+    timer.shutdown();
+    this_thread::sleep_for(sec(1));
+
+}
 
 #endif //MIT6_824_C_TIMER_HPP
 

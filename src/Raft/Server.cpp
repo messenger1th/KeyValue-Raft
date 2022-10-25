@@ -126,7 +126,7 @@ void Server::as_leader() {
 
     printf("server[%llu] I' m a leader, term: %d \n", this->id, this->current_term);
 
-    this->election_timer.stop();
+    this->election_timer.shutdown();
     while (this->state == State::Leader) {
         for (const auto& [server_id, ptr]: other_server_connections) {
             ptr->set_timeout(this->election_timer_base.count() / 2);
@@ -144,8 +144,8 @@ void Server::as_leader() {
 void Server::start_election_timer() {
     this->election_timer.reset();
     this->election_timer.set_period(ms(election_timer_base.count() + rand() % election_timer_fluctuate.count()));
-    cout << "start a thread" << endl;
-    election_timer.start(&Server::as_candidate, this);
+    cout << "set_callback a thread" << endl;
+    election_timer.set_callback(&Server::as_candidate, this);
 }
 
 

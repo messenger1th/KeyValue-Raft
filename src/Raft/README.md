@@ -6,11 +6,11 @@
 
 ### Starts Up
 
-be a follower when start up, steps as follows.
+be a follower when set_callback up, steps as follows.
 
 1. read configuration from configuration file.
    1. all servers in cluster and their IP address & Port information.
-2. start a timer for election, run a RPC server in thread for vote request, append entry requests.
+2. set_callback a timer for election, run a RPC server in thread for vote request, append entry requests.
 
 
 
@@ -26,11 +26,11 @@ after being a candidate, steps  as follows.
 
 revert to follower state anytime receives a valid append entry which means a new leader win the vote. 
 
-1. set a voting timer, if election timeout, start a new election.
+1. set a voting timer, if election timeout, set_callback a new election.
 2. increase  current  term, otherwise voting request will be rejected.
 3. vote for self
-4. if timeout, reset elec start a new election.
-5. sent `VoteRequest` RPC in parallel, become leader if granted by majority, finish this election before election timer start a new election. 
+4. if timeout, reset elec set_callback a new election.
+5. sent `VoteRequest` RPC in parallel, become leader if granted by majority, finish this election before election timer set_callback a new election. 
 
 
 
