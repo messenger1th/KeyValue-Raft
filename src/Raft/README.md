@@ -29,7 +29,7 @@ revert to follower state anytime receives a valid append entry which means a new
 1. set a voting timer, if election timeout, start a new election.
 2. increase  current  term, otherwise voting request will be rejected.
 3. vote for self
-4. reset election timer, start a new election after timeout.
+4. if timeout, reset elec start a new election.
 5. sent `VoteRequest` RPC in parallel, become leader if granted by majority, finish this election before election timer start a new election. 
 
 

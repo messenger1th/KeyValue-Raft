@@ -20,10 +20,9 @@ int main(int argc, char* argv[]) {
     server_rpc.bind("request_vote", &Server::request_vote, &s);
     server_rpc.bind("append_entries", &Server::append_entries, &s);
 
-    sleep(5);
-    s.starts_up();
-    /* help to start all server*/
+    thread t(&Server::starts_up, ref(s)); t.detach();
 
+    /* help to start all server*/
     server_rpc.run();
     return 0;
 }

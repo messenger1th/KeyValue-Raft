@@ -40,9 +40,7 @@ struct AppendResult {
 
 class NetAddress{
 public:
-    NetAddress() {
-
-    }
+    NetAddress() = default;
 
     NetAddress(const string& ip, const size_t& port): ip(ip), port(port) {}
     std::string ip;
@@ -59,10 +57,7 @@ public:
     Server(size_t id, const std::string &IP, const size_t &port);
 
     /* RPC */
-    std::string Hello(size_t id) {
-        printf("server[id] send Hello\n");
-        return "Hello";
-    }
+    std::string Hello(size_t id);
 
     VoteResult request_vote(size_t term, size_t candidate_id, size_t last_log_index, size_t last_log_term);
     AppendResult append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term, const std::vector<LogEntry>& entries, size_t leader_commit);
@@ -89,11 +84,15 @@ private:
     size_t last_applied{0};
 
     /* extra information*/
-    State current_state{State::Follower};
+    std::atomic<State> current_state{State::Follower};
 
 private:
     /* timer */
-    Timer<ms> election_timer{1000};
+    ms election_timer_base{1000};
+    ms election_timer_fluctuate{1000};
+    Timer<ms> election_timer{2500};
+
+    void start_election_timer();
 
     /* id -> ip:port */
     size_t id;
