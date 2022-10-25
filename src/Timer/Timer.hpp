@@ -112,8 +112,7 @@ void Timer<Precision>::operate(Func&&  f) {
         cv.wait(running_lock, [=] () -> bool { return this->state == State::running; });
         auto start_point = std::chrono::system_clock::now();
         if (cv.wait_for(pause_lock, remain.load(), [=] () -> bool { return this->state == State::pause; })) {
-            auto tpe = this->remain.load() - (std::chrono::system_clock::now() - start_point;
-            this->remain = this->remain - (std::system_clock::now() - start_point).count();
+            remain = remain.load() - std::chrono::duration_cast<Precision>(std::chrono::system_clock::now() - start_point).count();
         } else {
             f();
             this->remain = period;
