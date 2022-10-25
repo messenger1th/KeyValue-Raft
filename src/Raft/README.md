@@ -46,6 +46,8 @@ revert to follower state anytime receives a valid append entry which means a new
 
 ### Add a new Server into Cluster
 
+
+
 ## Details not Mentioned in Paper
 
 ### When to set `voteFor` to `null` ? 
@@ -63,6 +65,19 @@ Link: https://stackoverflow.com/questions/50425312/in-raft-distributed-consensus
 Yes, as mentioned above, anytime leader receive a term higher than its current term, will update its term and convert to a follower.
 
 Link: https://stackoverflow.com/questions/71230789/raft-will-term-increasing-all-the-time-if-partitioned
+
+
+
+
+
+### When should a follower set its election timer?
+
+1. before checking the log matching property
+2. Follower decides to grant its vote to that Candidate
+
+Link: https://stackoverflow.com/questions/66944088/when-should-a-raft-follower-record-an-rpc
+
+
 
 
 

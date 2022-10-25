@@ -41,6 +41,14 @@ public:
         this->remain = period;
     }
 
+    inline void puase() {
+        this->puase = true;
+    }
+
+    inline void resume() {
+        this->puase = true;
+    }
+
     inline void reset_check_interval(Precision interval) {
         this->check_interval = interval;
     }
@@ -49,12 +57,17 @@ public:
         this->once = once;
     }
 
+    inline void set_period(Precision period) {
+        this->period = period;
+    }
+
 private:
     std::atomic<bool> stop_flag{false};
     Precision period;
     std::atomic<Precision> remain;
     std::atomic<Precision> check_interval;
     std::atomic<bool> once{true};
+    std::atomic<bool> pause{false};
 
 private:
     /* class help functions */
@@ -80,7 +93,7 @@ Timer<Precision>::Timer(Precision period, Precision check_interval)  : period(pe
                                                                        check_interval(check_interval) {}
 template<typename Precision>
 template<class Period>
-Timer<Precision>::Timer(Period &&period): Timer(period, period / 10) {}
+Timer<Precision>::Timer(Period &&period): Timer(period, period / 100) {}
 
 template<typename Precision>
 template<typename Func, typename... Args>
@@ -99,7 +112,10 @@ void Timer<Precision>::operate(Func&&  f) {
     auto previous_time_point = std::chrono::system_clock::now();
     while (!stop_flag) {
         auto now = std::chrono::system_clock::now();
-        remain = remain.load() - std::chrono::duration_cast<Precision>(now - previous_time_point);
+        //TODO: optimize it, let the thread sleep until get the lock.
+        if (!pause) {
+            remain = remain.load() - std::chrono::duration_cast<Precision>(now - previous_time_point);
+        }
         if (remain.load() < remain.load().zero()) {
             reset();
 

@@ -20,22 +20,24 @@ using std::cout, std::endl;
 using ms = std::chrono::milliseconds;
 using s = std::chrono::seconds;
 
+
+constexpr auto delay = 1000;
 constexpr size_t null = 0;
 
 struct LogEntry {
-    size_t term;
-    size_t index;
-    std::string command;
+    size_t term{0};
+    size_t index{0};
+    std::string command{""};
 };
 
 struct VoteResult {
-    size_t term;
-    bool vote_granted;
+    size_t term{0};
+    bool vote_granted{false};
 };
 
 struct AppendResult {
-    size_t term;
-    bool success;
+    size_t term{0};
+    bool success{false};
 };
 
 class NetAddress{
@@ -69,7 +71,6 @@ public:
     /* be a leader */
     void as_leader();
 
-
     /* help function*/
     void starts_up();
 
@@ -89,15 +90,11 @@ private:
 
 private:
     /* election timer relevant property */
-    ms election_timer_base{1000};
-    ms election_timer_fluctuate{1000};
-    Timer<ms> election_timer{2500};
+    ms election_timer_base{delay};
+    ms election_timer_fluctuate{delay};
+    Timer<ms> election_timer{delay};
     /* election timer relevant function */
     void start_election_timer();
-
-
-    /* as a leader */
-
 
     /* id -> ip:port */
     size_t id;
@@ -109,6 +106,24 @@ private:
     /* extra information */
     std::atomic<size_t> last_log_term{0};
     std::atomic<size_t> last_log_index{0};
+
+
+private:
+    /* when receive more up-to-date term, update current_term & be a follower*/
+    void update_current_term(size_t term) {
+        this->vote_for = null;
+        this->current_term = term;
+        be_follower();
+    }
+
+    void be_follower() {
+        if (this->state != State::Follower) {
+            this->state = State::Follower;
+            start_election_timer();
+        } else {
+            this->election_timer.reset();
+        }
+    }
 };
 
 

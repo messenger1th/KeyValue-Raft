@@ -5,6 +5,7 @@
 #include "Server.hpp"
 
 //TODO:delete it;
+#include <stdbool.h>
 #include <csignal>
 
 Server::Server(size_t id, const std::string &pair) : Server(id, pair.substr(0, pair.find(':')),
@@ -34,18 +35,14 @@ void Server::starts_up() {
 
 VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_log_index, size_t last_log_term) {
 
-    printf("candidate[%llu] is calling request_voting\n", candidate_id);
-
-    /* If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)*/
-    if (this->current_term < term) {
-        this->state = State::Follower;
-        this->current_term = term;
-    }
+    printf("candidate[%llu] is calling request_vote\n", candidate_id);
 
     VoteResult res{this->current_term, false};
     /* 1. Reply false if term < currentTerm (§5.1) */
     if (this->current_term > term) {
         return res;
+    } else if (this->current_term < term) {
+        update_current_term(term);
     }
 
     /* 2. Reply false, if votedFor is not null or candidateId, */
@@ -58,6 +55,7 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
         return res;
     }
 
+    this->election_timer.reset();
     res.vote_granted = true;
     return res;
 }
@@ -68,10 +66,8 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
     AppendResult res{this->current_term, false};
     if (this->current_term > term) {
         return res;
-    } else if (this->current_term  == term) {
-        /* If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)*/
-        this->state = State::Follower;
-        this->current_term = term;
+    } else if (this->current_term  < term) {
+        update_current_term(term);
     }
 
 
@@ -80,6 +76,9 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
     }
     //TODO step2: Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm (§5.3)
 
+    /* after checking term, in this time point, the RPC requester would be a valid leader. */
+    this->election_timer.reset();
+
     //TODO step3: If an existing entry conflicts with a new one (same index
     //but different terms), delete the existing entry and all that
     //follow it (§5.3)
@@ -87,7 +86,7 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
     //TODO step4: Append any new entries not already in the logAppend any new entries not already in the log
 
     //TODO step5: If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
-
+    this->election_timer.reset();
     res.success = true;
     return res;
 }
@@ -107,8 +106,9 @@ void Server::as_candidate() {
         ptr->set_timeout(election_timer_base.count() + rand() % election_timer_fluctuate.count());
         VoteResult vote_result = ptr->call<VoteResult>("request_vote", this->id, this->id, 0, 0).val();
         vote_count += vote_result.vote_granted ? 1 : 0;
-        if (vote_result.vote_granted) {
-            vote_count++;
+        if (this->current_term < vote_result.term) {
+            update_current_term(this->current_term);
+            return;
         }
     }
 
@@ -128,21 +128,25 @@ void Server::as_leader() {
 
     this->election_timer.stop();
     while (this->state == State::Leader) {
-        sleep(1);
         for (const auto& [server_id, ptr]: other_server_connections) {
-            ptr->set_timeout(election_timer_base.count() + rand() % election_timer_fluctuate.count());
-            string hello = ptr->call<string>("Hello", this->id).val();
-            printf("Send Hello to %d, Response: %s\n", server_id, hello.c_str());
+            ptr->set_timeout(this->election_timer_base.count() / 2);
+            AppendResult append_result = ptr->call<AppendResult>("append_entries", this->current_term, this->id, 0, 0, vector<LogEntry>{}, 0).val();
+            printf("Term[%llu] Send append_entry to %llu, Response: %d \n", this->current_term, server_id, append_result.success);
+            if (append_result.term > current_term) {
+                update_current_term(append_result.term);
+                return;
+            }
         }
+        std::this_thread::sleep_for(std::chrono::milliseconds(delay / 2));
     }
-    cout << "end" << endl;
 }
 
 void Server::start_election_timer() {
+    this->election_timer.reset();
+    this->election_timer.set_period(ms(election_timer_base.count() + rand() % election_timer_fluctuate.count()));
+    cout << "start a thread" << endl;
     election_timer.start(&Server::as_candidate, this);
-
 }
-
 
 
 std::string Server::Hello(size_t id)  {
