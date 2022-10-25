@@ -9,6 +9,7 @@
 #include <atomic>
 #include <thread>
 #include <functional>
+#include <iostream>
 #include <condition_variable>
 
 
@@ -47,8 +48,9 @@ public:
     }
 
     inline void run() {
+        std::cout << "ok" << std::endl;
         pause_lock.unlock();
-        this->state = State::runing;
+        this->state = State::running;
         cv.notify_one();
     }
 
@@ -84,7 +86,7 @@ Timer<Precision>:: ~Timer() {
 
 template<typename Precision>
 template<class Period>
-Timer<Precision>::Timer(Period &&period) :  period(std::forward<Period>(period)), remain(this->period), pause_lock(m, std::defer_lock), running_lock(m, std::defer_lock) {}
+Timer<Precision>::Timer(Period &&period) :  period(std::forward<Period>(period)), remain(this->period), pause_lock(m), running_lock(m, std::defer_lock) {}
 
 
 template<typename Precision>
@@ -112,7 +114,7 @@ void Timer<Precision>::operate(Func&&  f) {
         cv.wait(running_lock, [=] () -> bool { return this->state == State::running; });
         auto start_point = std::chrono::system_clock::now();
         if (cv.wait_for(pause_lock, remain.load(), [=] () -> bool { return this->state == State::pause; })) {
-            remain = remain.load() - std::chrono::duration_cast<Precision>(std::chrono::system_clock::now() - start_point).count();
+            remain = remain.load() - std::chrono::duration_cast<Precision>(std::chrono::system_clock::now() - start_point);
         } else {
             f();
             this->remain = period;
@@ -120,37 +122,6 @@ void Timer<Precision>::operate(Func&&  f) {
     }
 }
 
-class Temp {
-public:
-    void f() {
-
-    }
-};
-
-using namespace std;
-
-int main() {
-    using ms = std::chrono::milliseconds;
-    using sec = std::chrono::seconds;
-    ms s1(ms(1));
-    atomic<ms> a(s1);
-
-    Timer<ms> timer(1000);
-
-    Temp t;
-    timer.set_callback(&Temp::f, t);
-    std::this_thread::sleep_for(sec (3));
-
-    timer.pause();
-
-    this_thread::sleep_for(sec (3));
-
-    this_thread::sleep_for(sec (3));
-
-    timer.shutdown();
-    this_thread::sleep_for(sec(1));
-
-}
 
 #endif //MIT6_824_C_TIMER_HPP
 
