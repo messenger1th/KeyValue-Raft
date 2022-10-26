@@ -40,7 +40,7 @@ void Server::starts_up() {
 
 VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_log_index, size_t last_log_term) {
 
-    printf("candidate[%llu] is calling request_vote\n", candidate_id);
+    printf("candidate[%llu] is calling request_vote, term[%llu]\n", candidate_id, term);
 
     VoteResult res{this->current_term, false};
     /* 1. Reply false if term < currentTerm (§5.1) */
@@ -149,6 +149,7 @@ void Server::as_leader() {
 
 void Server::start_election_timer() {
     this->election_timer.reset_period(ms(election_timer_base.count() + rand() % election_timer_fluctuate.count()));
+    this->election_timer.reset();
     this->election_timer.run();
 }
 
