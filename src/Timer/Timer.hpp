@@ -38,8 +38,12 @@ public:
     void reset_period(Period&& period);
 
     void reset() {
-        this->state = State::resetting;
-        running_lock.unlock();
+        if (this->state == State::pause) {
+            this->remain = period;
+        } else {
+            this->state = State::resetting;
+            running_lock.unlock();
+        }
     }
 
     void pause() {

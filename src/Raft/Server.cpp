@@ -96,7 +96,7 @@ void Server::as_candidate() {
     /* steps after being a candidate */
     this->state = State::Candidate; //change state.
     ++this->current_term;   // increment term.
-    start_election_timer(); // start a new election timer.
+//    start_election_timer(); // start a new election timer.
     size_t vote_count = 1;  // vote for self.
 
     printf("server[%llu] I' m a candidate, term: %d\n", this->id, this->current_term);
@@ -143,9 +143,10 @@ void Server::as_leader() {
 
 void Server::start_election_timer() {
     this->election_timer.reset();
-    this->election_timer.set_period(ms(election_timer_base.count() + rand() % election_timer_fluctuate.count()));
+    this->election_timer.reset_period(ms(election_timer_base.count() + rand() % election_timer_fluctuate.count()));
     cout << "set_callback a thread" << endl;
     election_timer.set_callback(&Server::as_candidate, this);
+    election_timer.run();
 }
 
 
