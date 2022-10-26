@@ -12,15 +12,18 @@ int main(int argc, char* argv[]) {
     string ip = "127.0.0.1";
     int port = 5000;
     port += id;
+
     Server s(id, ip, port);
+    s.read_config();
+
     buttonrpc server_rpc;
     server_rpc.as_server(port);
-
     server_rpc.bind("Hello", &Server::Hello, &s);
     server_rpc.bind("request_vote", &Server::request_vote, &s);
     server_rpc.bind("append_entries", &Server::append_entries, &s);
 
-    thread t(&Server::starts_up, ref(s)); t.detach();
+    s.starts_up();
+//    thread t(&Server::starts_up, &s); t.detach();
 
     /* help to start all server*/
     server_rpc.run();
