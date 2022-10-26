@@ -11,6 +11,7 @@
 #include <functional>
 #include <iostream>
 #include <mutex>
+#include <cassert>
 #include <condition_variable>
 
 
@@ -47,7 +48,10 @@ public:
             this->remain = period;
         } else {
             this->state = State::resetting;
-            running_lock.unlock();
+            //TODO: fix the bug: it will be unlock a locker without a lock when frequency of calling resetting big enough */
+            if (running_lock.owns_lock()) {
+                running_lock.unlock();
+            }
         }
     }
 

@@ -75,10 +75,10 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
         update_current_term(term);
     }
 
-
     if (this->current_term < term) {
         return res;
     }
+
     //TODO step2: Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm (§5.3)
 
     /* after checking term, in this time point, the RPC requester would be a valid leader. */
@@ -127,9 +127,17 @@ void Server::as_candidate() {
 }
 
 void Server::as_leader() {
+    /* stop election_timer  */
     election_timer.stop();
 
     //TODO: create leader unique property.
+    auto next_log_index = get_last_log_info().second + 1;
+    unordered_map<size_t, size_t> next_index;
+    unordered_map<size_t, size_t> match_index; //TODO: what is this for ?
+    for (const auto&[server_id, _]: other_server_connections) {
+        next_index[server_id] = next_log_index;
+        match_index[server_id] = 0;
+    }
 
     //TODO: create leader timer for send heartbeat periodically.
 
@@ -137,10 +145,25 @@ void Server::as_leader() {
     printf("server[%llu] I' m a leader, term: %d \n", this->id, this->current_term);
 
     while (this->state == State::Leader) {
+        for (int i = 0; i < 5; ++i) {
+            append_log();
+        }
+        auto last_log_info = get_last_log_info();
+        const size_t current_last_log_index = last_log_info.second;
+        const size_t last_log_term = last_log_info.first;
         for (const auto& [server_id, ptr]: other_server_connections) {
+
+            if (next_index[server_id] >= current_last_log_index) {
+                continue;
+            }
+
             ptr->set_timeout(this->election_timer_base.count() / 2);
-            AppendResult append_result = ptr->call<AppendResult>("append_entries", this->current_term, this->id, 0, 0, vector<LogEntry>{}, 0).val();
+            size_t prev_log_term = next_index[server_id] - 1;
+            vector<LogEntry> entries = get_log_interval(prev_log_term + 1, current_last_log_index + 1);
+            AppendResult append_result = ptr->call<AppendResult>("append_entries", this->current_term, this->id, prev_log_term, p, 0, entries, 0).val();
             printf("Term[%llu] Send append_entry to %llu, Response: %d \n", this->current_term, server_id, append_result.success);
+
+
             if (append_result.term > current_term) {
                 update_current_term(append_result.term);
                 return;
@@ -164,3 +187,12 @@ std::string Server::Hello(size_t id)  {
     return "Hello";
 }
 
+vector<LogEntry> Server::get_log_interval(size_t start, size_t end) {
+    vector<LogEntry> res; res.reserve(end - start);
+    for (int i = start; i < end; ++i) {
+        res.emplace_back(logs[i]);
+    }
+    return res;
+}
+
+LogEntry::LogEntry(size_t term, size_t index, const string &command) : term(term), index(index), command(command) {}

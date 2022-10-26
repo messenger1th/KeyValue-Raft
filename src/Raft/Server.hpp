@@ -14,6 +14,8 @@
 
 /* debug */
 #include <iostream>
+#include <queue>
+
 using std::cout, std::endl;
 /*TODO: delete above*/
 
@@ -23,11 +25,17 @@ using s = std::chrono::seconds;
 
 constexpr auto delay = 1000;
 constexpr size_t null = 0;
+constexpr ms client_request_frequency(100);
 
-struct LogEntry {
+class LogEntry {
+public:
     size_t term{0};
     size_t index{0};
     std::string command{""};
+
+    LogEntry() = default;
+    LogEntry(size_t term, size_t index, const string &command);
+
 };
 
 struct VoteResult {
@@ -75,25 +83,39 @@ public:
     void read_config();
     void starts_up();
 
-private:
+
+private: /* Data mentioned in paper. */
+
     /* persistent part */
     size_t current_term{0};
     size_t vote_for{null};
-    std::vector<LogEntry> log;
+    std::vector<LogEntry> logs{LogEntry()}; // start from 1.
 
     /* volatile part */
     size_t commit_index{0};
     size_t last_applied{0};
 
-    /* extra information*/
+
+private: /* extra information*/
+
+    /* Log Part */
+    std::mutex last_log_m;
+    size_t last_log_term{0};
+    size_t last_log_index{0};
+
+    /* dynamically change when member change */
     size_t majority_count{2};
+
+
+    /* state information */
     std::atomic<State> state{State::Follower};
 
-private:
+
     /* election timer relevant property */
     ms election_timer_base{delay};
     ms election_timer_fluctuate{delay};
     Timer<ms> election_timer{delay};
+
     /* election timer relevant function */
     void start_election_timer();
 
@@ -104,12 +126,10 @@ private:
     std::unordered_map<size_t, NetAddress> other_servers;
     std::unordered_map<size_t, unique_ptr<buttonrpc>> other_server_connections;
 
-    /* extra information */
-    std::atomic<size_t> last_log_term{0};
-    std::atomic<size_t> last_log_index{0};
 
 
 private:
+
     /* when receive more up-to-date term, update current_term & be a follower*/
     void update_current_term(size_t term) {
         this->vote_for = null;
@@ -125,6 +145,38 @@ private:
             this->election_timer.reset();
         }
     }
+
+    inline size_t cluster_size() {
+        return this->other_server_connections.size() + 1;
+    }
+
+    pair<size_t, size_t> get_last_log_info() {
+        unique_lock<std::mutex> lock(this->last_log_m);
+        return {last_log_term, last_log_index};
+    }
+
+private: /* debug part */
+    /* */
+
+
+    /* simulated client RPQ request */
+
+    void simulate_client() {
+
+    }
+
+    void client_server(vector<size_t>& next_index, vector<size_t>& match_index) {
+
+    }
+
+
+    void append_log() {
+        this->logs.emplace_back(this->current_term, logs.size(), "Hello");
+        this->last_log_term = logs.back().term;
+        this->last_log_index = logs.back().index;
+    }
+
+    vector<LogEntry> get_log_interval(size_t start, size_t end);
 };
 
 

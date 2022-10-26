@@ -8,6 +8,12 @@
 #include "Timer.hpp"
 
 using namespace std;
+struct Data {
+    size_t index;
+    size_t term;;
+};
+
+
 class Temp {
 public:
     void f() {
@@ -20,16 +26,26 @@ using namespace std;
 int main() {
     using ms = std::chrono::milliseconds;
     using sec = std::chrono::seconds;
-    ms s1(ms(1));
-    atomic<ms> a(s1);
-
-    Timer<ms> timer(1000);
-
+//    ms s1(ms(1));
+//    atomic<ms> a(s1);
+//
+//    Timer<ms> timer(1000);
+//
+//    Temp t;
+//    timer.set_callback(&Temp::f, t);
+//    timer.run();
+//    std::this_thread::sleep_for(std::chrono::seconds (2));
+//    timer.pause();
+//    timer.reset();
+//    while (true);
+    Timer<ms> timer(100);
     Temp t;
-    timer.set_callback(&Temp::f, t);
+    timer.set_callback(&Temp::f, &t);
     timer.run();
-    std::this_thread::sleep_for(std::chrono::seconds (2));
-    timer.pause();
-    timer.reset();
-    while (true);
+    for (int i = 0; i < 1000000000; ++i) {
+        timer.reset();
+    }
+
+
+    return 0;
 }
