@@ -11,7 +11,7 @@ using namespace std;
 class Temp {
 public:
     void f() {
-        cout << "ehhhh" << endl;
+//        cout << "ehhhh" << endl;
     }
 };
 
@@ -28,6 +28,9 @@ int main() {
     Temp t;
     timer.set_callback(&Temp::f, t);
     timer.run();
-    while (true);
+    std::this_thread::sleep_for(std::chrono::seconds (2));
+    timer.pause();
 
+//    timer.pause();
+    while (true);
 }

@@ -10,6 +10,7 @@
 #include <thread>
 #include <functional>
 #include <iostream>
+#include <mutex>
 #include <condition_variable>
 
 
@@ -33,44 +34,38 @@ public:
     }
 
 
-    /* just pass default period & set check interval as 1/10 of period */
     template<class Period>
     void reset_period(Period&& period);
 
-    inline void reset() {
-        this->remain = period;
+    void reset() {
+        this->state = State::resetting;
+        running_lock.unlock();
     }
 
-    inline void pause() {
-        running_lock.unlock();
+    void pause() {
         this->state = State::pause;
-        cv.notify_one();
+        running_lock.unlock();
     }
 
     inline void run() {
-        std::cout << "ok" << std::endl;
-        pause_lock.unlock();
         this->state = State::running;
-        cv.notify_one();
+        pause_lock.unlock();
     }
 
-    inline void set_period(Precision period) {
-        this->period = period;
-    }
 
 private:
 
-    enum class State{running, pause, shutdown};
+    enum class State{running, pause, shutdown, resetting};
     std::atomic<State> state{State::pause};
     Precision period;
     std::atomic<Precision> remain;
     std::atomic<bool> once{false};
 
     /* use for manage timer start & pause */
-    std::mutex m;
+    std::timed_mutex m;
     std::condition_variable cv;
-    std::unique_lock<std::mutex> running_lock;
-    std::unique_lock<std::mutex> pause_lock;
+    std::unique_lock<std::timed_mutex> running_lock;
+    std::unique_lock<std::timed_mutex> pause_lock;
 
 private:
     /* class help functions */
@@ -81,7 +76,7 @@ private:
 template<typename Precision>
 Timer<Precision>:: ~Timer() {
     /* stop the detached thread */
-    this->state = State::shutdown;
+    this->shutdown();
 }
 
 template<typename Precision>
@@ -105,17 +100,40 @@ void Timer<Precision>::set_callback(Func &&f, Args &&... args) {
     t.detach();
 }
 
+
 template<typename Precision>
 template<typename Func>
 void Timer<Precision>::operate(Func&&  f) {
     auto previous_time_point = std::chrono::system_clock::now();
+//    running_lock.lock();
     while (this->state != State::shutdown) {
         /* waiting signal to start */
-        cv.wait(running_lock, [=] () -> bool { return this->state == State::running; });
+        if (!running_lock.owns_lock()) {
+            /* lock() function will block here. */
+            running_lock.lock(); // is it possible to make it sleep ?
+        }
+//        cv.wait(running_lock, [=] () -> bool { return this->state == State::running; });
+//        std::cout << "running " << pause_lock.owns_lock() << running_lock.owns_lock()<< std::endl;
+
         auto start_point = std::chrono::system_clock::now();
-        if (cv.wait_for(pause_lock, remain.load(), [=] () -> bool { return this->state == State::pause; })) {
-            remain = remain.load() - std::chrono::duration_cast<Precision>(std::chrono::system_clock::now() - start_point);
+
+//        pause_lock.lock();
+//        std::cout << "pass " << pause_lock.owns_lock() << running_lock.owns_lock()<< std::endl;
+
+        /* what's happen when remain.load() < 0 ? */
+        if (pause_lock.try_lock_for(remain.load())) {
+            if (this->state == State::pause) {
+                std::cout << "pause" << std::endl;
+                remain = remain.load() - std::chrono::duration_cast<Precision>(std::chrono::system_clock::now() - start_point);
+            } else if (this->state == State::resetting) {
+                pause_lock.unlock();
+                std::cout << "resetting" << std::endl;
+                this->state = State::running;
+                remain = period;
+            }
+
         } else {
+            std::cout << "timeout" << std::endl;
             f();
             this->remain = period;
         }
