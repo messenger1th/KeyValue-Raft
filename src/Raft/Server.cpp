@@ -109,8 +109,11 @@ void Server::as_candidate() {
     //TODO: make this step in parallel
     for (const auto& [server_id, ptr]: other_server_connections) {
         ptr->set_timeout(election_timer_base.count() / 2 );
-        VoteResult vote_result = ptr->call<VoteResult>("request_vote", this->id, this->id, 0, 0).val();
+        VoteResult vote_result = ptr->call<VoteResult>("request_vote", this->current_term, this->id, 0, 0).val();
         vote_count += vote_result.vote_granted ? 1 : 0;
+        if (vote_result.vote_granted) {
+            printf("%llu vote me(Server[%llu])\n", server_id, this->id);
+        }
         if (this->current_term < vote_result.term) {
             update_current_term(this->current_term);
             return;
