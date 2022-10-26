@@ -72,6 +72,7 @@ public:
     void as_leader();
 
     /* help function*/
+    void read_config();
     void starts_up();
 
 private:

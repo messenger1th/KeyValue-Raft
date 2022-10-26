@@ -18,8 +18,7 @@ Server::Server(size_t id, const std::string &IP, const size_t &port):
 }
 
 
-void Server::starts_up() {
-    sleep(5);
+void Server::read_config() {
     printf("starts up\n");
     for (size_t i = 1; i <= 3; ++i) {
         size_t port = i + 5000;
@@ -30,6 +29,12 @@ void Server::starts_up() {
             printf("config port %lu\n", port);
         }
     }
+
+    election_timer.set_callback(&Server::as_candidate, this);
+}
+
+void Server::starts_up() {
+//    sleep(3);
     start_election_timer();
 }
 
@@ -96,14 +101,14 @@ void Server::as_candidate() {
     /* steps after being a candidate */
     this->state = State::Candidate; //change state.
     ++this->current_term;   // increment term.
-//    start_election_timer(); // start a new election timer.
+    election_timer.reset(); // start a new election timer.
     size_t vote_count = 1;  // vote for self.
 
     printf("server[%llu] I' m a candidate, term: %d\n", this->id, this->current_term);
 
     //TODO: make this step in parallel
     for (const auto& [server_id, ptr]: other_server_connections) {
-        ptr->set_timeout(election_timer_base.count() + rand() % election_timer_fluctuate.count());
+        ptr->set_timeout(election_timer_base.count() / 2 );
         VoteResult vote_result = ptr->call<VoteResult>("request_vote", this->id, this->id, 0, 0).val();
         vote_count += vote_result.vote_granted ? 1 : 0;
         if (this->current_term < vote_result.term) {
@@ -119,6 +124,8 @@ void Server::as_candidate() {
 }
 
 void Server::as_leader() {
+    election_timer.stop();
+
     //TODO: create leader unique property.
 
     //TODO: create leader timer for send heartbeat periodically.
@@ -126,7 +133,6 @@ void Server::as_leader() {
 
     printf("server[%llu] I' m a leader, term: %d \n", this->id, this->current_term);
 
-    this->election_timer.shutdown();
     while (this->state == State::Leader) {
         for (const auto& [server_id, ptr]: other_server_connections) {
             ptr->set_timeout(this->election_timer_base.count() / 2);
@@ -142,11 +148,8 @@ void Server::as_leader() {
 }
 
 void Server::start_election_timer() {
-    this->election_timer.reset();
     this->election_timer.reset_period(ms(election_timer_base.count() + rand() % election_timer_fluctuate.count()));
-    cout << "set_callback a thread" << endl;
-    election_timer.set_callback(&Server::as_candidate, this);
-    election_timer.run();
+    this->election_timer.run();
 }
 
 
@@ -156,3 +159,4 @@ std::string Server::Hello(size_t id)  {
     printf("server[%d] send Hello\n", id);
     return "Hello";
 }
+

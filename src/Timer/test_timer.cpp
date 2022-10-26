@@ -31,6 +31,5 @@ int main() {
     std::this_thread::sleep_for(std::chrono::seconds (2));
     timer.pause();
     timer.reset();
-//    timer.pause();
     while (true);
 }
