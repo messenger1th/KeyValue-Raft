@@ -38,6 +38,8 @@ public:
 
 };
 
+ostream& operator<<(ostream& out, const LogEntry& entry);
+
 struct VoteResult {
     size_t term{0};
     bool vote_granted{false};
@@ -155,6 +157,7 @@ private:
         return {last_log_term, last_log_index};
     }
 
+
 private: /* debug part */
     /* */
 
@@ -170,13 +173,35 @@ private: /* debug part */
     }
 
 
-    void append_log() {
+    void append_log_simulate() {
         this->logs.emplace_back(this->current_term, logs.size(), "Hello");
         this->last_log_term = logs.back().term;
         this->last_log_index = logs.back().index;
     }
 
-    vector<LogEntry> get_log_interval(size_t start, size_t end);
+
+
+    vector<LogEntry> get_log(size_t start, size_t end) {
+        return vector<LogEntry>(logs.begin() + start, logs.begin() + end);
+    }
+
+    size_t get_log_term(size_t index) {
+        return logs[index].term;
+    }
+
+    bool match_prev_log_term(size_t term) {
+        return get_total_log_size() > term;
+    }
+
+    size_t get_total_log_size() {
+        return logs.size();
+    }
+
+    bool log_conflict(size_t index, size_t term);
+
+    void remove_conflict_logs(size_t index);
+
+    void append_logs(const vector<LogEntry>& entries);
 };
 
 
