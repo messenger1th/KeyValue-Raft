@@ -6,15 +6,16 @@
 #define MIT6_824_C_SERVER_HPP
 #include <vector>
 #include <cstddef>
+#include <stdlib.h>
 #include <string>
 
 #include "Timer.hpp"
 #include "buttonrpc.hpp"
 
-
 /* debug */
 #include <iostream>
 #include <queue>
+
 
 using std::cout, std::endl;
 /*TODO: delete above*/
@@ -72,7 +73,7 @@ public:
     std::string Hello(size_t id);
 
     VoteResult request_vote(size_t term, size_t candidate_id, size_t last_log_index, size_t last_log_term);
-    AppendResult append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term, const std::vector<LogEntry>& entries, size_t leader_commit);
+    AppendResult append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term, const string &entries, size_t leader_commit);
 
 
     /* be a candidate */
@@ -181,8 +182,25 @@ private: /* debug part */
 
 
 
-    vector<LogEntry> get_log(size_t start, size_t end) {
-        return vector<LogEntry>(logs.begin() + start, logs.begin() + end);
+    std::string get_log_string(size_t start, size_t end) {
+        string res;
+        for (auto& i = start; i < end; ++i) {
+            res = res + " " + to_string(logs[i].term) + " " + to_string(logs[i].index) + " " + logs[i].command;
+        }
+        return res;
+    }
+
+    vector<LogEntry> parse_string_logs(const string& s) {
+        vector<LogEntry> res;
+        istringstream read(s);
+        LogEntry entry;
+        while (read >> entry.term >> entry.index >> entry.command) {
+            res.emplace_back(entry);
+        }
+//        for (const auto &entry : res) {
+//            cout << entry.term << " " << entry.index << " " << entry.command << endl;
+//        }
+        return res;
     }
 
     size_t get_log_term(size_t index) {
