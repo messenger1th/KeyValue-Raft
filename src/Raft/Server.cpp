@@ -40,14 +40,14 @@ void Server::starts_up() {
 
 VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_log_index, size_t last_log_term) {
 
-    printf("candidate[%lu] is calling request_vote, term[%lu]\n", candidate_id, term);
+    printf("candidate[%lu] is calling request_vote, term[%lu], last_log-term[%lu]-index[%lu]\n", candidate_id, term, this->last_log_term, this->last_log_index);
 
     VoteResult res{this->current_term, false};
     /* 1. Reply false if term < currentTerm (§5.1) */
     if (this->current_term > term) {
         return res;
     } else if (this->current_term < term) {
-        //TODO: should this step after set vote_for to null ?
+        //TODO: should this step after set vote_for to null ? otherwise it vote for the requester if requester has a higher term with appropriate log.
         update_current_term(term);
     }
 
@@ -68,7 +68,7 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
 }
 
 AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term,
-                                    const std::vector<LogEntry> &entries, size_t leader_commit) {
+                                    const string &entries, size_t leader_commit) {
 
     printf("Leader[%lu]  append_entries, term[%lu], prev_log_index[%lu], prev_log_term[%lu], \n", leader_id, term, prev_log_index, prev_log_term);
     AppendResult res{this->current_term, false};
@@ -78,32 +78,36 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
         update_current_term(term);
     }
 
-    cout << "after step1" << endl;
+//    cout << "after step1" << endl;
     // step2: Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm (§5.3)
     if (!match_prev_log_term(prev_log_term)) {
         return res;
     }
-    cout << "after step2 " << endl;
+//    cout << "after step2 " << endl;
 
     /* after checking term, in this time point, the RPC requester would be a valid leader. */
     this->election_timer.reset();
 
-    //TODO step3: If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it (§5.3)
+    /* step3: If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it (§5.3) */
     if (log_conflict(prev_log_index, prev_log_term)) {
         printf("Server[%lu]: Log[%lu] Conflicts \n", this->id, last_log_index);
         remove_conflict_logs(prev_log_index);
     }
-    cout << "after step3 " << endl;
+//    cout << "after step3 " << endl;
 
 
-    //TODO step4: Append any new entries not already in the logAppend any new entries not already in the log
-    append_logs(entries);
-    cout << "after step4" << endl;
+    /* step4: Append any new entries not already in the logAppend any new entries not already in the log */
+    append_logs(parse_string_logs(entries));
+//    cout << "after step4" << endl;
 
-    //TODO step5: If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
+    /* Step5: If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry) */
+    if (leader_commit > commit_index) {
+        this->commit_index = min(leader_commit, last_log_index);
+        if (this->last_applied < this->commit_index) {
+            //TODO: for application layer, start a thread to increment & applied to state machine.
+        }
+    }
 
-
-    this->election_timer.reset();
     res.success = true;
     return res;
 }
@@ -115,8 +119,9 @@ void Server::as_candidate() {
     ++this->current_term;   // increment term.
     election_timer.reset(); // start a new election timer.
     size_t vote_count = 1;  // vote for self.
+    this->vote_for = this->id;
 
-    printf("server[%llu] I' m a candidate, term: %d\n", this->id, this->current_term);
+    printf("server[%lu] I' m a candidate, term: %lu\n", this->id, this->current_term);
 
     //TODO: make this step in parallel
     for (const auto& [server_id, ptr]: other_server_connections) {
@@ -124,7 +129,7 @@ void Server::as_candidate() {
         VoteResult vote_result = ptr->call<VoteResult>("request_vote", this->current_term, this->id, 0, 0).val();
         vote_count += vote_result.vote_granted ? 1 : 0;
         if (vote_result.vote_granted) {
-            printf("%llu vote me(Server[%llu])\n", server_id, this->id);
+            printf("%lu vote me(Server[%lu])\n", server_id, this->id);
         }
         if (this->current_term < vote_result.term) {
             update_current_term(this->current_term);
@@ -142,7 +147,7 @@ void Server::as_leader() {
     /* stop election_timer  */
     election_timer.stop();
 
-    //TODO: create leader unique property.
+    /* create leader unique property. */
     auto next_log_index = get_last_log_info().second + 1;
     unordered_map<size_t, size_t> next_index;
     unordered_map<size_t, size_t> match_index; //TODO: what is this for ?
@@ -165,25 +170,20 @@ void Server::as_leader() {
         const size_t current_last_log_index = last_log_info.second;
 
         for (const auto& [server_id, ptr]: other_server_connections) {
-
-            if (next_index[server_id] >= current_last_log_index) {
-                continue;
-            }
             ptr->set_timeout(this->election_timer_base.count() / 2);
 
-            while (this->state == State::Leader) {
-                vector<LogEntry> entries = get_log(next_index[server_id], current_last_log_index + 1);
-
-                for (auto& entry: entries) {
-                    cout << entry << endl;
+            while (next_index[server_id] <= current_last_log_index) {
+                if (this->state != State::Leader) {
+                    return;
                 }
 
+                std::string entries = get_log_string(next_index[server_id], current_last_log_index + 1);
                 size_t prev_log_index = next_index[server_id] - 1;
                 size_t prev_log_term = get_log_term(prev_log_index);
 
                 AppendResult append_result = ptr->call<AppendResult>("append_entries", this->current_term, this->id, prev_log_index,
                                                                      prev_log_term, entries, this->commit_index).val();
-                printf("Term[%llu] Send append_entry to %llu, Response: %d , next_index: [%lu] \n", this->current_term, server_id, append_result.success, next_index[server_id]);
+                printf("Term[%lu] Send append_entry to %lu, Response: %d , next_index: [%lu] \n", this->current_term, server_id, append_result.success, next_index[server_id]);
 
 
                 if (append_result.term > current_term) {
@@ -193,7 +193,6 @@ void Server::as_leader() {
 
                 if (append_result.success) {
                     next_index[server_id] = current_last_log_index + 1;
-                    break;
                     //TODO: should update matchIndex ?
                 } else {
                     next_index[server_id] -= 5;
@@ -204,7 +203,7 @@ void Server::as_leader() {
             //TODO: update commit_index in leader.
 
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(delay / 2));
+        std::this_thread::sleep_for(std::chrono::milliseconds(delay / 3 * 2));
     }
 }
 
@@ -218,7 +217,7 @@ void Server::start_election_timer() {
 std::string Server::Hello(size_t id)  {
 
     this->election_timer.reset();
-    printf("server[%d] send Hello\n", id);
+    printf("server[%lu] send Hello\n", id);
     return "Hello";
 }
 
@@ -237,6 +236,7 @@ void Server::append_logs(const vector<LogEntry>& entries) {
     }
     this->last_log_term = entries.back().term;
     this->last_log_index = entries.back().index;
+//    printf("logs.size() = %lu, last_log_term[%lu], last_log_index[%lu]\n", this->logs.size(), last_log_term, last_log_index);
 }
 
 

@@ -43,7 +43,7 @@ public:
             return;
         }
 
-        std::cout << "reset: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
+//        std::cout << "reset: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
         if (this->state == State::pause) {
             this->remain = period;
         } else {
@@ -56,7 +56,7 @@ public:
     }
 
     void stop() {
-        std::cout << "stop: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
+//        std::cout << "stop: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
 
         if (this->state == State::running) {
             this->state = State::pause;
@@ -69,7 +69,7 @@ public:
         if (this->state == State::pause) {
             return;
         }
-        std::cout << "pause: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
+//        std::cout << "pause: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
         this->state = State::pause;
         running_lock.unlock();
     }
@@ -79,9 +79,9 @@ public:
         if (this->state == State::running || this->state == State::resetting) {
             return;
         }
-        std::cout << "run: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
+//        std::cout << "run: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
         this->state = State::running;
-        std::cout << "pause has a lock ? ans : " << pause_lock.owns_lock() << std::endl;
+//        std::cout << "pause has a lock ? ans : " << pause_lock.owns_lock() << std::endl;
         pause_lock.unlock();
     }
 
@@ -164,7 +164,7 @@ void Timer<Precision>::operate(Func&&  f) {
                 remain = remain.load() - std::chrono::duration_cast<Precision>(std::chrono::system_clock::now() - start_point);
             } else if (this->state == State::resetting) {
 //                std::cout << "resetting" << std::endl;
-                std::cout << "pause has a Lock ? ans : " << pause_lock.owns_lock() << std::endl;
+//                std::cout << "pause has a Lock ? ans : " << pause_lock.owns_lock() << std::endl;
                 pause_lock.unlock();
                 this->state = State::running;
                 remain = period;
