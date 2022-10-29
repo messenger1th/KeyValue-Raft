@@ -47,7 +47,7 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
     if (this->current_term > term) {
         return res;
     } else if (this->current_term < term) {
-        //TODO: should this step after set vote_for to null ? otherwise it vote for the requester if requester has a higher term with appropriate log.
+        //TODO: should this step after set vote_for to null ? otherwise it vote for the requester if requester has a higher term with appropriate log.e
         update_current_term(term);
     }
 

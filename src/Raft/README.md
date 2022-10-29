@@ -85,3 +85,29 @@ Link: https://stackoverflow.com/questions/66944088/when-should-a-raft-follower-r
 
 ## Problem&How to Solve
 
+How to understand ? 
+
+> A leader is not allowed to update `commitIndex` to somewhere in a *previous* term (or, for that matter, a future term). Thus, as the rule says, you specifically need to check that `log[N].term == currentTerm`. This is because Raft leaders cannot be sure an entry is actually committed (and will not ever be changed in the future) if it’s not from their current term. This is illustrated by Figure 8 in the paper.
+
+https://stackoverflow.com/questions/60397950/confusion-about-raft-algorithm
+
+
+
+https://stackoverflow.com/questions/46376293/what-is-lastapplied-and-matchindex-in-raft-protocol-for-volatile-state-in-server
+
+
+
+## Preference
+
+1. Paper: https://raft.github.io/raft.pdf
+
+2. MIT6.824 Lab : https://pdos.csail.mit.edu/6.824/
+
+3. Blog: https://thesquareplanet.com/blog/students-guide-to-raft/
+
+   
+
+### Q&A
+
+1. https://thesquareplanet.com/blog/raft-qa/
+2. https://stackoverflow.com/questions/60397950/confusion-about-raft-algorithm
