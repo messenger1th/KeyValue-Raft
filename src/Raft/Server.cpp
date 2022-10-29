@@ -78,27 +78,33 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
         update_current_term(term);
     }
 
-//    cout << "after step1" << endl;
+    cout << "after step1" << endl;
     // step2: Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm (§5.3)
-    if (!match_prev_log_term(prev_log_term)) {
+    if (!match_prev_log_term(prev_log_index, prev_log_term)) {
         return res;
     }
-//    cout << "after step2 " << endl;
+
+    cout << "after step2 " << endl;
 
     /* after checking term, in this time point, the RPC requester would be a valid leader. */
     this->election_timer.reset();
 
+    cout << "begin step3" << endl;
+    bool check = log_conflict(prev_log_index, prev_log_term);
+    if (check) {
+        cout << "checkout ." << endl;
+    }
     /* step3: If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it (§5.3) */
-    if (log_conflict(prev_log_index, prev_log_term)) {
+    if (check) {
         printf("Server[%lu]: Log[%lu] Conflicts \n", this->id, last_log_index);
         remove_conflict_logs(prev_log_index);
     }
-//    cout << "after step3 " << endl;
+    cout << "after step3 " << endl;
 
-
+    //TODO: BUG AS FOLLOW
     /* step4: Append any new entries not already in the logAppend any new entries not already in the log */
     append_logs(parse_string_logs(entries));
-//    cout << "after step4" << endl;
+    cout << "after step4" << endl;
 
     /* Step5: If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry) */
     if (leader_commit > commit_index) {
@@ -191,6 +197,8 @@ std::string Server::Hello(size_t id)  {
 
 void Server::remove_conflict_logs(size_t index) {
     //TODO: binary search the logs, rather than just remove it all ?
+    //TODO: update it after change way of log store.
+    cout << "size: " << index - logs[0].index + 1 << endl;
     this->logs.resize(index - logs[0].index + 1);
 }
 
