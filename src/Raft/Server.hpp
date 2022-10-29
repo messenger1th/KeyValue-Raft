@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <stdlib.h>
 #include <string>
+#include <shared_mutex>
 
 #include "Timer.hpp"
 #include "buttonrpc.hpp"
@@ -24,7 +25,7 @@ using ms = std::chrono::milliseconds;
 using s = std::chrono::seconds;
 
 
-constexpr auto delay = 1000;
+constexpr auto delay = 3000;
 constexpr size_t null = 0;
 constexpr ms client_request_frequency(100);
 
@@ -92,6 +93,8 @@ private: /* Data mentioned in paper. */
     /* persistent part */
     size_t current_term{0};
     size_t vote_for{null};
+
+    std::shared_mutex logs_m;
     std::vector<LogEntry> logs{LogEntry()}; // start from 1.
 
     /* volatile part */
@@ -129,6 +132,9 @@ private: /* extra information*/
     std::unordered_map<size_t, NetAddress> other_servers;
     std::unordered_map<size_t, unique_ptr<buttonrpc>> other_server_connections;
 
+    /* leader unique*/
+    unordered_map<size_t, size_t> next_index;
+    unordered_map<size_t, size_t> match_index; //TODO: what is this for ?
 
 
 private:
@@ -149,12 +155,15 @@ private:
         }
     }
 
+    void send_log_heartbeat(size_t server_id);
+
+
     inline size_t cluster_size() {
         return this->other_server_connections.size() + 1;
     }
 
     pair<size_t, size_t> get_last_log_info() {
-        unique_lock<std::mutex> lock(this->last_log_m);
+        std::shared_lock<std::shared_mutex> lock{this->logs_m};
         return {last_log_term, last_log_index};
     }
 
@@ -175,6 +184,7 @@ private: /* debug part */
 
 
     void append_log_simulate() {
+        unique_lock<std::shared_mutex> lock(logs_m);
         this->logs.emplace_back(this->current_term, logs.size(), "Hello");
         this->last_log_term = logs.back().term;
         this->last_log_index = logs.back().index;
@@ -197,13 +207,11 @@ private: /* debug part */
         while (read >> entry.term >> entry.index >> entry.command) {
             res.emplace_back(entry);
         }
-//        for (const auto &entry : res) {
-//            cout << entry.term << " " << entry.index << " " << entry.command << endl;
-//        }
         return res;
     }
 
     size_t get_log_term(size_t index) {
+        //TODO: update it after log compaction(use base + offset)
         return logs[index].term;
     }
 
@@ -212,10 +220,13 @@ private: /* debug part */
     }
 
     size_t get_total_log_size() {
+        //TODO: update it after log compaction(use base + size());
         return logs.size();
     }
 
-    bool log_conflict(size_t index, size_t term);
+    bool log_conflict(size_t index, size_t term)  {
+        return get_log_term(index) != term;
+    }
 
     void remove_conflict_logs(size_t index);
 

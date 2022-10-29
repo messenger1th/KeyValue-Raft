@@ -26,7 +26,7 @@ void Server::read_config() {
             other_servers.emplace(i, NetAddress{"127.0.0.1", port});
             other_server_connections.emplace(i, make_unique<buttonrpc>());
             other_server_connections[i]->as_client("127.0.0.1", port);
-            printf("config port %lu\n", port);
+            other_server_connections[i]->set_timeout(this->election_timer_base.count() / 2);
         }
     }
 
@@ -146,11 +146,9 @@ void Server::as_candidate() {
 void Server::as_leader() {
     /* stop election_timer  */
     election_timer.stop();
-
-    /* create leader unique property. */
     auto next_log_index = get_last_log_info().second + 1;
-    unordered_map<size_t, size_t> next_index;
-    unordered_map<size_t, size_t> match_index; //TODO: what is this for ?
+    next_index.clear();
+    match_index.clear();
     for (const auto&[server_id, _]: other_server_connections) {
         next_index[server_id] = next_log_index;
         match_index[server_id] = 0;
@@ -159,49 +157,17 @@ void Server::as_leader() {
     //TODO: create leader timer for send heartbeat periodically.
 
 
-    printf("server[%llu] I' m a leader, term: %d \n", this->id, this->current_term);
+    printf("server[%lu] I' m a leader, term: %lu \n", this->id, this->current_term);
+
+    for (const auto& [server_id, ptr]: other_server_connections) {
+        thread t(&Server::send_log_heartbeat, this, server_id);
+        t.detach();
+    }
+    cout << "thread create finished" << endl;
 
     while (this->state == State::Leader) {
         for (int i = 0; i < 1; ++i) {
             append_log_simulate();
-        }
-        auto last_log_info = get_last_log_info();
-        const size_t current_last_log_term = last_log_info.first;
-        const size_t current_last_log_index = last_log_info.second;
-
-        for (const auto& [server_id, ptr]: other_server_connections) {
-            ptr->set_timeout(this->election_timer_base.count() / 2);
-
-            while (next_index[server_id] <= current_last_log_index) {
-                if (this->state != State::Leader) {
-                    return;
-                }
-
-                std::string entries = get_log_string(next_index[server_id], current_last_log_index + 1);
-                size_t prev_log_index = next_index[server_id] - 1;
-                size_t prev_log_term = get_log_term(prev_log_index);
-
-                AppendResult append_result = ptr->call<AppendResult>("append_entries", this->current_term, this->id, prev_log_index,
-                                                                     prev_log_term, entries, this->commit_index).val();
-                printf("Term[%lu] Send append_entry to %lu, Response: %d , next_index: [%lu] \n", this->current_term, server_id, append_result.success, next_index[server_id]);
-
-
-                if (append_result.term > current_term) {
-                    update_current_term(append_result.term);
-                    return;
-                }
-
-                if (append_result.success) {
-                    next_index[server_id] = current_last_log_index + 1;
-                    //TODO: should update matchIndex ?
-                } else {
-                    next_index[server_id] -= 5;
-//                    printf("server[%lu]: inconsistency\n", server_id);
-                    //TODO: decrement nextIndex and retry;
-                }
-            }
-            //TODO: update commit_index in leader.
-
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(delay / 3 * 2));
     }
@@ -213,7 +179,7 @@ void Server::start_election_timer() {
     this->election_timer.run();
 }
 
-
+/* origin RPC function for debug. */
 std::string Server::Hello(size_t id)  {
 
     this->election_timer.reset();
@@ -221,22 +187,58 @@ std::string Server::Hello(size_t id)  {
     return "Hello";
 }
 
-bool Server::log_conflict(size_t index, size_t term) {
-    return get_log_term(index) != term;
-}
+
 
 void Server::remove_conflict_logs(size_t index) {
-    //TODO: binary search the logs, rather than just remove it all.
+    //TODO: binary search the logs, rather than just remove it all ?
     this->logs.resize(index - logs[0].index + 1);
 }
 
 void Server::append_logs(const vector<LogEntry>& entries) {
+    /* actually, this function doesn't need to lock logs because only Leader RPC will append log, namely without data race. */
     for (const auto& entry: entries) {
         this->logs.emplace_back(entry);
     }
     this->last_log_term = entries.back().term;
     this->last_log_index = entries.back().index;
 //    printf("logs.size() = %lu, last_log_term[%lu], last_log_index[%lu]\n", this->logs.size(), last_log_term, last_log_index);
+}
+
+void Server::send_log_heartbeat(size_t server_id) {
+    const auto& ptr = other_server_connections[server_id];
+    while (this->state == State::Leader) {
+        auto last_log_info = get_last_log_info();
+        const size_t current_last_log_term = last_log_info.first;
+        const size_t current_last_log_index = last_log_info.second;
+
+
+        size_t send_log_size = current_last_log_index + 1 - next_index[server_id];
+        std::string entries = get_log_string(next_index[server_id], current_last_log_index + 1);
+        size_t prev_log_index = next_index[server_id] - 1;
+        size_t prev_log_term = get_log_term(prev_log_index);
+
+        AppendResult append_result = ptr->call<AppendResult>("append_entries", this->current_term, this->id, prev_log_index,
+                                                             prev_log_term, entries, this->commit_index).val();
+
+        if (append_result.term > current_term) {
+            update_current_term(append_result.term);
+            return;
+        }
+
+        if (append_result.success) {
+            next_index[server_id] = current_last_log_index + 1;
+            //TODO: should update matchIndex ?
+            match_index[server_id] += send_log_size;
+            printf("Term[%lu] Send append_entry to %lu, Response: %d , next_index: [%lu], matchIndex[%lu]\n", this->current_term, server_id, append_result.success, next_index[server_id], match_index[server_id]);
+
+        } else {
+            /* decrement nextIndex and retry; */
+//            next_index[server_id] -= 1;
+            assert(next_index[server_id] > 0);
+            printf("server[%lu]: inconsistency or crash down! \n", server_id);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(delay / 3 * 2));
+    }
 }
 
 
