@@ -148,30 +148,24 @@ void Timer<Precision>::operate(Func&&  f) {
         /* waiting signal to start */
         if (!running_lock.owns_lock()) {
             /* lock() function will block here. */
-            running_lock.lock(); // is it possible to make it sleep ?
+            running_lock.lock(); //TODO: figure out is it possible to make it sleep ?
         }
-//        cv.wait(running_lock, [=] () -> bool { return this->state == State::running; });
-//        std::cout << "running " << pause_lock.owns_lock() << running_lock.owns_lock()<< std::endl;
 
+        this->state = State::running;
         auto start_point = std::chrono::system_clock::now();
 
-//        pause_lock.lock();
-//        std::cout << "pass " << pause_lock.owns_lock() << running_lock.owns_lock()<< std::endl;
-
-        /* what's happen when remain.load() < 0 ? */
+        //TODO what's happen when remain.load() < 0 ?
         if (pause_lock.try_lock_for(remain.load())) {
-            if (this->state == State::pause) {
+            if (this->state == State::pause) { /* pause lock */
                 remain = remain.load() - std::chrono::duration_cast<Precision>(std::chrono::system_clock::now() - start_point);
-            } else if (this->state == State::resetting) {
+            } else if (this->state == State::resetting) { /* with pause locker but will unlocker later, and running lock*/
 //                std::cout << "resetting" << std::endl;
 //                std::cout << "pause has a Lock ? ans : " << pause_lock.owns_lock() << std::endl;
                 pause_lock.unlock();
-                this->state = State::running;
+                running_lock.lock();
                 remain = period;
             }
-
-        } else {
-//            std::cout << "timeout" << std::endl;
+        } else {/* with running locker */
             f();
             this->remain = period;
         }
