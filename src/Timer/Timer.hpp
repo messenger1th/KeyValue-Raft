@@ -39,6 +39,7 @@ public:
     void reset_period(Period&& period);
 
     void reset() {
+        std::unique_lock<std::mutex> state_lock(state_mutex);
         if (this->state == State::resetting) {
             return;
         }
@@ -46,42 +47,44 @@ public:
 //        std::cout << "reset: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
         if (this->state == State::pause) {
             this->remain = period;
-        } else {
+        } else if (this->state == State::running) {
             this->state = State::resetting;
-            //TODO: fix the bug: it will be unlock a locker without a lock when frequency of calling resetting big enough */
-            if (running_lock.owns_lock()) {
-                running_lock.unlock();
-            }
+            //TODO: fix the bug: it will be unlock a unlocked locker when frequency of calling resetting big enough */
+            running_lock.unlock();
         }
     }
 
     void stop() {
-//        std::cout << "stop: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
-
-        if (this->state == State::running) {
-            this->state = State::pause;
-            running_lock.unlock();
-        }
-        this->remain = this->period;
+        pause();
+        reset();
     }
 
     void pause() {
+        std::unique_lock<std::mutex> state_lock(state_mutex);
         if (this->state == State::pause) {
             return;
         }
-//        std::cout << "pause: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
+        if (state == State::resetting) {
+            // todo face thie condition
+            this->state
+        }
+        std::cout << "pause: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
         this->state = State::pause;
+        std::cout << "pause()-> running has a lock ? ans : " << pause_lock.owns_lock() << std::endl;
         running_lock.unlock();
     }
 
     void run() {
+        std::unique_lock<std::mutex> state_lock(state_mutex);
+
+
         /* this states will not pause, just return */
         if (this->state == State::running || this->state == State::resetting) {
             return;
         }
 //        std::cout << "run: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
         this->state = State::running;
-//        std::cout << "pause has a lock ? ans : " << pause_lock.owns_lock() << std::endl;
+        std::cout << "run()  pause has a lock ? ans : " << pause_lock.owns_lock() << std::endl;
         pause_lock.unlock();
     }
 
@@ -94,6 +97,7 @@ private:
             shutdown = 3,
             resetting = 4,
     };
+    std::mutex state_mutex;
     std::atomic<State> state{State::pause};
     Precision period;
     std::atomic<Precision> remain;
@@ -156,16 +160,16 @@ void Timer<Precision>::operate(Func&&  f) {
 
         //TODO what's happen when remain.load() < 0 ?
         if (pause_lock.try_lock_for(remain.load())) {
+            std::unique_lock<std::mutex> state_lock(state_mutex);
             if (this->state == State::pause) { /* pause lock */
                 remain = remain.load() - std::chrono::duration_cast<Precision>(std::chrono::system_clock::now() - start_point);
             } else if (this->state == State::resetting) { /* with pause locker but will unlocker later, and running lock*/
 //                std::cout << "resetting" << std::endl;
 //                std::cout << "pause has a Lock ? ans : " << pause_lock.owns_lock() << std::endl;
                 pause_lock.unlock();
-                running_lock.lock();
                 remain = period;
             }
-        } else {/* with running locker */
+        } else { /* with running locker */
             f();
             this->remain = period;
         }
