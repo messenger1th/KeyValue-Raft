@@ -1,7 +1,3 @@
-//
-// Created by epoch on 10/20/22.
-//
-
 #include <iostream>
 #include <chrono>
 #include <thread>
@@ -17,15 +13,15 @@ struct Data {
 class Temp {
 public:
     void f() {
-//        cout << "ehhhh" << endl;
+        cout << "ehhhh" << endl;
     }
 };
 
 using namespace std;
-
 int main() {
+    cout << "Hello" << endl;
     using ms = std::chrono::milliseconds;
-    using sec = std::chrono::seconds;
+    using s = std::chrono::seconds;
 //    ms s1(ms(1));
 //    atomic<ms> a(s1);
 //
@@ -34,18 +30,45 @@ int main() {
 //    Temp t;
 //    timer.set_callback(&Temp::f, t);
 //    timer.run();
-//    std::this_thread::sleep_for(std::chrono::seconds (2));
+//    for (int i = 0; i < 3; ++i) {
+//        timer.restart();
+//        std::this_thread::sleep_for(ms(500));
+//    }
+//    std::this_thread::sleep_for(s(3));
 //    timer.pause();
-//    timer.reset();
 //    while (true);
-    Timer<ms> timer(100);
-    Temp t;
-    timer.set_callback(&Temp::f, &t);
-    timer.run();
-    for (int i = 0; i < 1000000000; ++i) {
-        timer.reset();
-    }
+//    Timer<ms> timer(100);
+//    Temp t;
+//    timer.set_callback(&Temp::f, &t);
+//    timer.run();
 
 
+
+    std::mutex m;
+//    std::unique_lock<std::mutex> lock_before(m);
+    bool flag = false;
+    std::condition_variable cv;
+    std::unique_lock<std::mutex> lock_before(m, std::defer_lock);
+    std::thread t([&]() {
+        std::this_thread::sleep_for(s(2));
+//        cv.notify_one();
+//        lock_before.unlock();
+        cout << "unlocked" << endl;
+        flag = true;
+//        cv.notify_one();
+    }); t.detach();
+
+    cout << "I'm not lock" << endl;
+    std::unique_lock<std::mutex> lock(m, std::defer_lock);
+    lock.lock();
+    cout << "locked" << endl;
+//    cv.w
+
+    cout << cv.wait_for(lock, s(5), [] () {
+        return false;
+    });
+    cout << "get" << endl;
+    lock.unlock();
+    cout << lock.owns_lock() << endl;
     return 0;
 }

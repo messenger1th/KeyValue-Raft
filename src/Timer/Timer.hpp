@@ -31,6 +31,8 @@ public:
     void set_callback(Func&& f, Args&&... args);
 
     inline void shutdown() {
+        std::unique_lock<std::mutex> state_lock(state_mutex);
+        this->state_changed = true;
         this->state = State::shutdown;
     }
 
@@ -38,76 +40,73 @@ public:
     template<class Period>
     void reset_period(Period&& period);
 
-    void reset() {
-        std::unique_lock<std::mutex> state_lock(state_mutex);
+    /* reset timer & rerun */
+    void restart() {
         if (this->state == State::resetting) {
             return;
         }
 
-//        std::cout << "reset: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
-        if (this->state == State::pause) {
-            this->remain = period;
-        } else if (this->state == State::running) {
+        {
+            std::cout << "try get lock" << std::endl;
+            std::unique_lock<std::mutex> state_lock(state_mutex);
+            std::cout << "no block" << std::endl;
             this->state = State::resetting;
-            //TODO: fix the bug: it will be unlock a unlocked locker when frequency of calling resetting big enough */
-            running_lock.unlock();
         }
+        this->state_changed = true;
+        cv.notify_one();
     }
 
+    /*TODO: implement functionality: reset timer & pause */
     void stop() {
         pause();
-        reset();
     }
 
+    /* just stop timer, no set timer. */
     void pause() {
-        std::unique_lock<std::mutex> state_lock(state_mutex);
         if (this->state == State::pause) {
-            return;
+            return ;
         }
-        if (state == State::resetting) {
-            // todo face thie condition
-            this->state
+        {
+            std::unique_lock<std::mutex> state_lock(state_mutex);
+            this->state = State::pause;
         }
-        std::cout << "pause: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
-        this->state = State::pause;
-        std::cout << "pause()-> running has a lock ? ans : " << pause_lock.owns_lock() << std::endl;
-        running_lock.unlock();
+        this->state_changed = true;
+        cv.notify_one();
     }
 
+    /* run from the paused time, */
     void run() {
-        std::unique_lock<std::mutex> state_lock(state_mutex);
-
-
-        /* this states will not pause, just return */
-        if (this->state == State::running || this->state == State::resetting) {
-            return;
+        if (this->state == State::running) {
+            return ;
         }
-//        std::cout << "run: " << static_cast<std::underlying_type_t<State>>(state.load()) << std::endl;
-        this->state = State::running;
-        std::cout << "run()  pause has a lock ? ans : " << pause_lock.owns_lock() << std::endl;
-        pause_lock.unlock();
+        {
+            std::unique_lock<std::mutex> state_lock(state_mutex);
+            this->state = State::running;
+        }
+        this->state_changed = true;
+        cv.notify_one();
     }
 
 
 private:
-
-    enum class State{
-            running = 1,
-            pause = 2,
-            shutdown = 3,
-            resetting = 4,
-    };
-    std::mutex state_mutex;
-    std::atomic<State> state{State::pause};
+    /* basic timer data */
     Precision period;
     std::atomic<Precision> remain;
-    std::atomic<bool> once{false};
+
+    /*for later feature: support once callback timer*/
+//    std::atomic<bool> once{false};
 
     /* use for manage timer start & pause */
-    std::timed_mutex m;
+    enum class State{
+        running = 1,
+        pause = 2,
+        shutdown = 3,
+        resetting = 4,
+    };
     std::condition_variable cv;
-    std::unique_lock<std::timed_mutex> running_lock;
-    std::unique_lock<std::timed_mutex> pause_lock;
+    std::mutex state_mutex;
+    std::atomic<State> state{State::pause};
+    std::atomic<bool> state_changed{false};
 
 private:
     /* class help functions */
@@ -123,7 +122,7 @@ Timer<Precision>:: ~Timer() {
 
 template<typename Precision>
 template<class Period>
-Timer<Precision>::Timer(Period &&period) :  period(std::forward<Period>(period)), remain(this->period), pause_lock(m), running_lock(m, std::defer_lock) {}
+Timer<Precision>::Timer(Period &&period) :  period(std::forward<Period>(period)), remain(this->period) {}
 
 
 template<typename Precision>
@@ -146,35 +145,62 @@ void Timer<Precision>::set_callback(Func &&f, Args &&... args) {
 template<typename Precision>
 template<typename Func>
 void Timer<Precision>::operate(Func&&  f) {
-    auto previous_time_point = std::chrono::system_clock::now();
-//    running_lock.lock();
+
+    std::unique_lock<std::mutex> state_lock(state_mutex);
     while (this->state != State::shutdown) {
-        /* waiting signal to start */
-        if (!running_lock.owns_lock()) {
-            /* lock() function will block here. */
-            running_lock.lock(); //TODO: figure out is it possible to make it sleep ?
-        }
 
-        this->state = State::running;
-        auto start_point = std::chrono::system_clock::now();
+        auto start = std::chrono::system_clock::now();
+        std::cout << remain.load().count() << std::endl;
 
-        //TODO what's happen when remain.load() < 0 ?
-        if (pause_lock.try_lock_for(remain.load())) {
-            std::unique_lock<std::mutex> state_lock(state_mutex);
-            if (this->state == State::pause) { /* pause lock */
-                remain = remain.load() - std::chrono::duration_cast<Precision>(std::chrono::system_clock::now() - start_point);
-            } else if (this->state == State::resetting) { /* with pause locker but will unlocker later, and running lock*/
-//                std::cout << "resetting" << std::endl;
-//                std::cout << "pause has a Lock ? ans : " << pause_lock.owns_lock() << std::endl;
-                pause_lock.unlock();
-                remain = period;
-            }
-        } else { /* with running locker */
-            f();
+        bool notified = cv.wait_for(state_lock, remain.load(), [this] () {
+            return this->state_changed.load();
+        });
+        std::cout << this->state_changed.load()<< std::endl;
+        std::cout << "after cv" << std::endl;
+        if (!notified) {
+            std::cout <<"yes" << std::endl;
+            
             this->remain = period;
+            switch (this->state) {
+                case State::running: {
+                    /* do the callback function. */
+                    f();
+                }break;
+                case State::pause: {
+                    /* pause state: do nothing, just continue loop. */
+                }break;
+                case State::shutdown: {
+                    std::cout << "shut" << std::endl;
+
+                    return;
+                }break;
+                default: throw std::runtime_error("no such reachable state in waiting timeout condition. Check it!");
+            }
+        } else {
+            std::cout <<"no" << std::endl;
+            switch(this->state) {
+                case State::running: {
+//                    throw std::runtime_error("no such reachable state. Check it!");
+                };break;
+                case State::pause:{
+                    this->remain =  this->remain.load() - std::chrono::duration_cast<Precision>(std::chrono::system_clock::now() - start);
+                }; break;
+                case State::resetting: {
+                    this->remain = period;
+                    this->state = State::running;
+                }; break;
+                case State::shutdown: {
+                    std::cout << "shut" << std::endl;
+                    return;
+                }break;
+                default: throw std::runtime_error("no such reachable state in awake condition. Check it!");
+            }
+            state_changed = false;
         }
+        std::cout << "loop end" << std::endl;
     }
 }
+
 
 
 #endif //MIT6_824_C_TIMER_HPP

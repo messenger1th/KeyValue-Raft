@@ -151,7 +151,7 @@ private:
             this->state = State::Follower;
             start_election_timer();
         } else {
-            this->election_timer.reset();
+            this->election_timer.restart();
         }
     }
 
