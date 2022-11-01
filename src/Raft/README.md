@@ -16,7 +16,7 @@ be a follower when set_callback up, steps as follows.
 
 ### Election: As Follower
 
-do nothing but response to RPC request like voting  and append entry and reset election timer every time it receive RPC request from leader or candidate.
+do nothing but response to RPC request like voting  and append entry and restart election timer every time it receive RPC request from leader or candidate.
 
 
 
@@ -29,7 +29,7 @@ revert to follower state anytime receives a valid append entry which means a new
 1. set a voting timer, if election timeout, set_callback a new election.
 2. increase  current  term, otherwise voting request will be rejected.
 3. vote for self
-4. if timeout, reset elec set_callback a new election.
+4. if timeout, restart elec set_callback a new election.
 5. sent `VoteRequest` RPC in parallel, become leader if granted by majority, finish this election before election timer set_callback a new election. 
 
 
@@ -54,7 +54,7 @@ revert to follower state anytime receives a valid append entry which means a new
 
 if RPC request or response contains term T > current term,  set it `null`.
 
-when a server receives a `RequestVote` RPC with a term higher than its own, it should update the term to the number observed **and also reset the `votedFor` to `null`** (meaning that in this case, it will always vote for the requesting server).
+when a server receives a `RequestVote` RPC with a term higher than its own, it should update the term to the number observed **and also restart the `votedFor` to `null`** (meaning that in this case, it will always vote for the requesting server).
 
 Link: https://stackoverflow.com/questions/50425312/in-raft-distributed-consensus-what-do-i-set-votedfor-to
 

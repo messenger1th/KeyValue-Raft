@@ -25,7 +25,7 @@ using ms = std::chrono::milliseconds;
 using s = std::chrono::seconds;
 
 
-constexpr auto delay = 3000;
+constexpr auto delay = 1000;
 constexpr size_t null = 0;
 constexpr ms client_request_frequency(100);
 
@@ -151,7 +151,7 @@ private:
             this->state = State::Follower;
             start_election_timer();
         } else {
-            this->election_timer.reset();
+            this->election_timer.restart();
         }
     }
 

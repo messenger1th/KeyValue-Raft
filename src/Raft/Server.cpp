@@ -19,7 +19,6 @@ Server::Server(size_t id, const std::string &IP, const size_t &port):
 
 
 void Server::read_config() {
-    printf("starts up\n");
     for (size_t i = 1; i <= 3; ++i) {
         size_t port = i + 5000;
         if (i != this->id) {
@@ -29,8 +28,8 @@ void Server::read_config() {
             other_server_connections[i]->set_timeout(this->election_timer_base.count() / 2);
         }
     }
-
     election_timer.set_callback(&Server::as_candidate, this);
+    printf("Configuration Done!\n");
 }
 
 void Server::starts_up() {
@@ -61,7 +60,7 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
         return res;
     }
 
-    this->election_timer.reset();
+    this->election_timer.restart();
     this->vote_for = candidate_id;
     res.vote_granted = true;
     return res;
@@ -70,9 +69,9 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
 AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term,
                                     const string &entries, size_t leader_commit) {
 
-    printf("Leader[%lu]  append_entries, term[%lu], prev_log_index[%lu], prev_log_term[%lu], \n", leader_id, term, prev_log_index, prev_log_term);
     AppendResult res{this->current_term, false};
     if (this->current_term > term) {
+        printf("Leader[%lu]  append_entries, term[%lu], prev_log_index[%lu], prev_log_term[%lu], return term[%lu], success[%d]\n", leader_id, term, prev_log_index, prev_log_term, res.term,res.success);
         return res;
     } else if (this->current_term  < term) {
         update_current_term(term);
@@ -81,14 +80,15 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
 //    cout << "after step1" << endl;
     // step2: Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm (§5.3)
     if (!match_prev_log_term(prev_log_index, prev_log_term)) {
+        printf("Leader[%lu]  append_entries, term[%lu], prev_log_index[%lu], prev_log_term[%lu], return term[%lu], success[%d]\n", leader_id, term, prev_log_index, prev_log_term, res.term,res.success);
         return res;
     }
 
 //    cout << "after step2 " << endl;
 
     /* after checking term, in this time point, the RPC requester would be a valid leader. */
-    this->election_timer.reset();
-
+    this->election_timer.restart();
+    std::cout << "reset" << endl;
 //    cout << "begin step3" << endl;
 
     /* step3: If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it (§5.3) */
@@ -112,15 +112,15 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
     }
 
     res.success = true;
+    printf("Leader[%lu]  append_entries, term[%lu], prev_log_index[%lu], prev_log_term[%lu], return term[%lu], success[%d]\n", leader_id, term, prev_log_index, prev_log_term, res.term,res.success);
     return res;
 }
 
 void Server::as_candidate() {
-
     /* steps after being a candidate */
     this->state = State::Candidate; //change state.
     ++this->current_term;   // increment term.
-    election_timer.reset(); // start a new election timer.
+    election_timer.restart(); // start a new election timer.
     size_t vote_count = 1;  // vote for self.
     this->vote_for = this->id;
 
@@ -178,14 +178,13 @@ void Server::as_leader() {
 
 void Server::start_election_timer() {
     this->election_timer.reset_period(ms(election_timer_base.count() + rand() % election_timer_fluctuate.count()));
-    this->election_timer.reset();
-    this->election_timer.run();
+    this->election_timer.restart();
 }
 
 /* origin RPC function for debug. */
 std::string Server::Hello(size_t id)  {
 
-    this->election_timer.reset();
+    this->election_timer.restart();
     printf("server[%lu] send Hello\n", id);
     return "Hello";
 }
