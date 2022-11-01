@@ -33,7 +33,6 @@ void Server::read_config() {
 }
 
 void Server::starts_up() {
-//    sleep(3);
     start_election_timer();
 }
 
@@ -223,7 +222,7 @@ void Server::send_log_heartbeat(size_t server_id) {
         if (append_result.success) {
             next_index[server_id] += send_log_size;
             //TODO: should update matchIndex ?
-            match_index[server_id] = next_index[server_id] - 1;
+            match_index[server_id] = prev_log_index + send_log_size;
             printf("Term[%lu] Send append_entry to %lu, Response: %d , next_index: [%lu], matchIndex[%lu]\n", this->current_term, server_id, append_result.success, next_index[server_id], match_index[server_id]);
 
         } else {
