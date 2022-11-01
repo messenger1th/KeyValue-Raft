@@ -110,4 +110,4 @@ https://stackoverflow.com/questions/46376293/what-is-lastapplied-and-matchindex-
 ### Q&A
 
 1. https://thesquareplanet.com/blog/raft-qa/
-2. https://stackoverflow.com/questions/60397950/confusion-about-raft-algorithm
+2. https://stackoverflow.com/questions/60397950/confusion-about-raft-algorithmw

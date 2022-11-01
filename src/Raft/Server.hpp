@@ -212,10 +212,6 @@ private: /* debug part */
 
     size_t get_log_term(size_t index) {
         //TODO: update it after log compaction(use base + offset)
-//        cout << "erroe" << endl;
-//        cout << index << endl;
-//        cout << logs.size() << index << endl;
-//        printf("logs.size() = [%lu], index = %lu", logs.size(), index);
         return logs[index].term;
     }
 
@@ -230,8 +226,6 @@ private: /* debug part */
 
     bool log_conflict(size_t index, size_t term)  {
         //TODO: update if after change way of log store.
-        printf("get_log_term->%lu term->%lu\n", get_log_term(index), term);
-//        cout << get_log_term(index) << term << endl;
         return get_log_term(index) != term;
     }
 

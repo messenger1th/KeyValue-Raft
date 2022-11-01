@@ -77,31 +77,25 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
         update_current_term(term);
     }
 
-//    cout << "after step1" << endl;
+    this->election_timer.restart();
+    std::cout << "reset" << endl;
+
     // step2: Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm (§5.3)
     if (!match_prev_log_term(prev_log_index, prev_log_term)) {
         printf("Leader[%lu]  append_entries, term[%lu], prev_log_index[%lu], prev_log_term[%lu], return term[%lu], success[%d]\n", leader_id, term, prev_log_index, prev_log_term, res.term,res.success);
         return res;
     }
 
-//    cout << "after step2 " << endl;
-
-    /* after checking term, in this time point, the RPC requester would be a valid leader. */
-    this->election_timer.restart();
-    std::cout << "reset" << endl;
-//    cout << "begin step3" << endl;
 
     /* step3: If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it (§5.3) */
     if (log_conflict(prev_log_index, prev_log_term)) {
         printf("Server[%lu]: Log[%lu] Conflicts \n", this->id, last_log_index);
         remove_conflict_logs(prev_log_index);
     }
-//    cout << "after step3 " << endl;
 
     //TODO: BUG AS FOLLOW
     /* step4: Append any new entries not already in the logAppend any new entries not already in the log */
     append_logs(parse_string_logs(entries));
-//    cout << "after step4" << endl;
 
     /* Step5: If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry) */
     if (leader_commit > commit_index) {
