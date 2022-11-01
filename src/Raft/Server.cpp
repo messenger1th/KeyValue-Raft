@@ -69,9 +69,9 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
 AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term,
                                     const string &entries, size_t leader_commit) {
 
-    printf("Leader[%lu]  append_entries, term[%lu], prev_log_index[%lu], prev_log_term[%lu], \n", leader_id, term, prev_log_index, prev_log_term);
     AppendResult res{this->current_term, false};
     if (this->current_term > term) {
+        printf("Leader[%lu]  append_entries, term[%lu], prev_log_index[%lu], prev_log_term[%lu], return term[%lu], success[%d]\n", leader_id, term, prev_log_index, prev_log_term, res.term,res.success);
         return res;
     } else if (this->current_term  < term) {
         update_current_term(term);
@@ -80,6 +80,7 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
 //    cout << "after step1" << endl;
     // step2: Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm (§5.3)
     if (!match_prev_log_term(prev_log_index, prev_log_term)) {
+        printf("Leader[%lu]  append_entries, term[%lu], prev_log_index[%lu], prev_log_term[%lu], return term[%lu], success[%d]\n", leader_id, term, prev_log_index, prev_log_term, res.term,res.success);
         return res;
     }
 
@@ -87,7 +88,7 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
 
     /* after checking term, in this time point, the RPC requester would be a valid leader. */
     this->election_timer.restart();
-
+    std::cout << "reset" << endl;
 //    cout << "begin step3" << endl;
 
     /* step3: If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it (§5.3) */
@@ -111,6 +112,7 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
     }
 
     res.success = true;
+    printf("Leader[%lu]  append_entries, term[%lu], prev_log_index[%lu], prev_log_term[%lu], return term[%lu], success[%d]\n", leader_id, term, prev_log_index, prev_log_term, res.term,res.success);
     return res;
 }
 
@@ -177,7 +179,6 @@ void Server::as_leader() {
 void Server::start_election_timer() {
     this->election_timer.reset_period(ms(election_timer_base.count() + rand() % election_timer_fluctuate.count()));
     this->election_timer.restart();
-    cout << "run" << endl;
 }
 
 /* origin RPC function for debug. */
