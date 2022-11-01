@@ -71,18 +71,18 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
 
     AppendResult res{this->current_term, false};
     if (this->current_term > term) {
-        printf("Leader[%lu]  append_entries, term[%lu], prev_log_index[%lu], prev_log_term[%lu], return term[%lu], success[%d]\n", leader_id, term, prev_log_index, prev_log_term, res.term,res.success);
+        printf("Leader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term,res.success);
         return res;
     } else if (this->current_term  < term) {
         update_current_term(term);
     }
 
+    /* reset its election timer after get a valid term, before checking the log matching property */
     this->election_timer.restart();
-    std::cout << "reset" << endl;
 
     // step2: Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm (§5.3)
     if (!match_prev_log_term(prev_log_index, prev_log_term)) {
-        printf("Leader[%lu]  append_entries, term[%lu], prev_log_index[%lu], prev_log_term[%lu], return term[%lu], success[%d]\n", leader_id, term, prev_log_index, prev_log_term, res.term,res.success);
+        printf("Leader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term,res.success);
         return res;
     }
 
@@ -106,7 +106,7 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
     }
 
     res.success = true;
-    printf("Leader[%lu]  append_entries, term[%lu], prev_log_index[%lu], prev_log_term[%lu], return term[%lu], success[%d]\n", leader_id, term, prev_log_index, prev_log_term, res.term,res.success);
+    printf("Leader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term, res.success);
     return res;
 }
 
@@ -200,19 +200,15 @@ void Server::append_logs(const vector<LogEntry>& entries) {
     //TODO: update it after log compaction
     this->last_log_term = logs.back().term;
     this->last_log_index = logs.back().index;
-//    printf("logs.size() = %lu, last_log_term[%lu], last_log_index[%lu]\n", this->logs.size(), last_log_term, last_log_index);
+    printf("current_last_log_info-size[%lu]-term[%lu]-index[%lu]\n", this->logs.size(), last_log_term, last_log_index);
 }
 
 void Server::send_log_heartbeat(size_t server_id) {
     const auto& ptr = other_server_connections[server_id];
     while (this->state == State::Leader) {
-        auto last_log_info = get_last_log_info();
-        const size_t current_last_log_term = last_log_info.first;
-        const size_t current_last_log_index = last_log_info.second;
 
-
-        size_t send_log_size = current_last_log_index + 1 - next_index[server_id];
-        std::string entries = get_log_string(next_index[server_id], current_last_log_index + 1);
+        size_t send_log_size = get_send_log_size(server_id);
+        std::string entries = get_log_string(next_index[server_id], next_index[server_id] + send_log_size);
         size_t prev_log_index = next_index[server_id] - 1;
         size_t prev_log_term = get_log_term(prev_log_index);
 
@@ -225,16 +221,21 @@ void Server::send_log_heartbeat(size_t server_id) {
         }
 
         if (append_result.success) {
-            next_index[server_id] = current_last_log_index + 1;
+            next_index[server_id] += send_log_size;
             //TODO: should update matchIndex ?
-            match_index[server_id] += send_log_size;
+            match_index[server_id] = next_index[server_id] - 1;
             printf("Term[%lu] Send append_entry to %lu, Response: %d , next_index: [%lu], matchIndex[%lu]\n", this->current_term, server_id, append_result.success, next_index[server_id], match_index[server_id]);
 
         } else {
             /* decrement nextIndex and retry; */
-//            next_index[server_id] -= 1;
-            assert(next_index[server_id] > 0);
-            printf("server[%lu]: inconsistency or crash down! \n", server_id);
+            if (append_result.term != 0) {
+                printf("server[%lu]: inconsistency!\n", server_id);
+                next_index[server_id] -= 1;
+                assert(next_index[server_id] > 0);
+                continue;
+            } else {
+                printf("server[%lu]: crash down! \n", server_id);
+            }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(delay / 3 * 2));
     }
