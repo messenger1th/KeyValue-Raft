@@ -28,6 +28,7 @@ using s = std::chrono::seconds;
 constexpr auto delay = 1000;
 constexpr size_t null = 0;
 constexpr ms client_request_frequency(100);
+constexpr size_t max_send_log_size = 5;
 
 class LogEntry {
 public:
@@ -77,11 +78,9 @@ public:
     AppendResult append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term, const string &entries, size_t leader_commit);
 
 
-    /* be a candidate */
-    void as_candidate();
 
-    /* be a leader */
-    void as_leader();
+    void as_candidate();    /* be a candidate */
+    void as_leader();    /* be a leader */
 
     /* help function*/
     void read_config();
@@ -167,6 +166,14 @@ private:
         return {last_log_term, last_log_index};
     }
 
+    size_t get_send_log_size(size_t server_id, bool is_conflict = false) {
+        if (is_conflict) {
+            return 0;
+        }
+        auto current_last_log_index = get_last_log_info().second;
+        return min(max_send_log_size, current_last_log_index - next_index[server_id] + 1);
+    }
+
 
 private: /* debug part */
     /* */
@@ -212,10 +219,6 @@ private: /* debug part */
 
     size_t get_log_term(size_t index) {
         //TODO: update it after log compaction(use base + offset)
-//        cout << "erroe" << endl;
-//        cout << index << endl;
-//        cout << logs.size() << index << endl;
-//        printf("logs.size() = [%lu], index = %lu", logs.size(), index);
         return logs[index].term;
     }
 
@@ -230,8 +233,6 @@ private: /* debug part */
 
     bool log_conflict(size_t index, size_t term)  {
         //TODO: update if after change way of log store.
-        printf("get_log_term->%lu term->%lu\n", get_log_term(index), term);
-//        cout << get_log_term(index) << term << endl;
         return get_log_term(index) != term;
     }
 

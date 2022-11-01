@@ -70,7 +70,7 @@ Link: https://stackoverflow.com/questions/71230789/raft-will-term-increasing-all
 
 
 
-### When should a follower set its election timer?
+### When should a follower reset its election timer?
 
 1. before checking the log matching property
 2. Follower decides to grant its vote to that Candidate
@@ -110,4 +110,4 @@ https://stackoverflow.com/questions/46376293/what-is-lastapplied-and-matchindex-
 ### Q&A
 
 1. https://thesquareplanet.com/blog/raft-qa/
-2. https://stackoverflow.com/questions/60397950/confusion-about-raft-algorithm
+2. https://stackoverflow.com/questions/60397950/confusion-about-raft-algorithmw
