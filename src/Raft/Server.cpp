@@ -92,7 +92,7 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
         remove_conflict_logs(prev_log_index);
     }
 
-    //TODO: BUG AS FOLLOW
+
     /* step4: Append any new entries not already in the logAppend any new entries not already in the log */
     append_logs(parse_string_logs(entries));
 
@@ -150,17 +150,14 @@ void Server::as_leader() {
         match_index[server_id] = 0;
     }
 
-    //TODO: create leader timer for send heartbeat periodically.
-
-
     printf("server[%lu] I' m a leader, term: %lu \n", this->id, this->current_term);
 
     for (const auto& [server_id, ptr]: other_server_connections) {
         thread t(&Server::send_log_heartbeat, this, server_id);
         t.detach();
     }
-    cout << "thread create finished" << endl;
 
+    //TODO: delete it after developed client.
     while (this->state == State::Leader) {
         for (int i = 0; i < 1; ++i) {
             append_log_simulate();
@@ -183,7 +180,6 @@ std::string Server::Hello(size_t id)  {
 }
 
 
-
 void Server::remove_conflict_logs(size_t index) {
     //TODO: binary search the logs, rather than just remove it all ?
     //TODO: update it after change way of log store.
@@ -192,11 +188,14 @@ void Server::remove_conflict_logs(size_t index) {
 }
 
 void Server::append_logs(const vector<LogEntry>& entries) {
+    //TODO: this should be a incorrect conclusion ?
     /* actually, this function doesn't need to lock logs because only Leader RPC will append log, namely without data race. */
     for (const auto& entry: entries) {
         this->logs.emplace_back(entry);
     }
-    //TODO: update it after log compaction
+
+    // TODO 1: update it after log compaction,
+    // TODO 2: use a lock to read ?
     this->last_log_term = logs.back().term;
     this->last_log_index = logs.back().index;
     printf("current_last_log_info-size[%lu]-term[%lu]-index[%lu]\n", this->logs.size(), last_log_term, last_log_index);
@@ -223,8 +222,10 @@ void Server::send_log_heartbeat(size_t server_id) {
             next_index[server_id] += send_log_size;
             //TODO: should update matchIndex ?
             match_index[server_id] = prev_log_index + send_log_size;
-            printf("Term[%lu] Send append_entry to %lu, Response: %d , next_index: [%lu], matchIndex[%lu]\n", this->current_term, server_id, append_result.success, next_index[server_id], match_index[server_id]);
-
+            printf("Term[%lu] Send append_entry to %lu, Response: %d , next_index: [%lu], matchIndex[%lu]\n", this->current_term, server_id, append_result.success, next_index[server_id], match_index[server_id].load());
+            if (match_index[server_id] > commit_index) {
+                //todo: use binary search to find the medium.
+            }
         } else {
             /* decrement nextIndex and retry; */
             if (append_result.term != 0) {

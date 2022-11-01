@@ -133,7 +133,7 @@ private: /* extra information*/
 
     /* leader unique*/
     unordered_map<size_t, size_t> next_index;
-    unordered_map<size_t, size_t> match_index; //TODO: what is this for ?
+    unordered_map<size_t, atomic<size_t>> match_index; //TODO: what is this for ?
 
 
 private:
@@ -197,7 +197,33 @@ private: /* debug part */
         this->last_log_index = logs.back().index;
     }
 
+    bool find_match_index_median_check(size_t mid) {
 
+    }
+
+    size_t find_match_index_median() {
+        size_t l = min_element(match_index.begin(), match_index.end(), [] (const auto& p1, const auto& p2) ->bool {
+            return p1.second < p2.second;
+        })->second;
+        size_t r = max_element(match_index.begin(), match_index.end(), [] (const auto& p1, const auto& p2) ->bool {
+            return p1.second < p2.second;
+        })->second;
+        if (l == r) {
+            return l;
+        }
+
+        int res = l;
+        while (l <= r) {
+            int mid = (r - l + 1) / 2;
+            if (find_match_index_median_check(mid)) {
+                res = mid;
+                l = mid + 1;
+            } else {
+                r = mid - 1;
+            }
+        }
+        return res;
+    }
 
     std::string get_log_string(size_t start, size_t end) {
         string res;

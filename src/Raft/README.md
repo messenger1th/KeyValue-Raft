@@ -97,6 +97,10 @@ Link: [Raft Q&A](https://thesquareplanet.com/blog/raft-qa/)
 
 
 
+### Should a leader hold a timer? 
+
+
+
 ## Problem&How to Solve
 
 ### How to understand ? 
