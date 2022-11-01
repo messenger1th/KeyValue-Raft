@@ -47,9 +47,7 @@ public:
         }
 
         {
-            std::cout << "try get lock" << std::endl;
             std::unique_lock<std::mutex> state_lock(state_mutex);
-            std::cout << "no block" << std::endl;
             this->state = State::resetting;
         }
         this->state_changed = true;
@@ -150,34 +148,27 @@ void Timer<Precision>::operate(Func&&  f) {
     while (this->state != State::shutdown) {
 
         auto start = std::chrono::system_clock::now();
-        std::cout << remain.load().count() << std::endl;
-
         bool notified = cv.wait_for(state_lock, remain.load(), [this] () {
             return this->state_changed.load();
         });
-        std::cout << this->state_changed.load()<< std::endl;
-        std::cout << "after cv" << std::endl;
         if (!notified) {
-            std::cout <<"yes" << std::endl;
-            
             this->remain = period;
             switch (this->state) {
                 case State::running: {
                     /* do the callback function. */
-                    f();
+                    std::thread t(f); t.detach();
                 }break;
                 case State::pause: {
                     /* pause state: do nothing, just continue loop. */
                 }break;
                 case State::shutdown: {
-                    std::cout << "shut" << std::endl;
-
                     return;
                 }break;
-                default: throw std::runtime_error("no such reachable state in waiting timeout condition. Check it!");
+                default:  {
+                    throw std::runtime_error("no such reachable state in waiting timeout condition. Check it!");
+                }
             }
         } else {
-            std::cout <<"no" << std::endl;
             switch(this->state) {
                 case State::running: {
 //                    throw std::runtime_error("no such reachable state. Check it!");
@@ -197,7 +188,6 @@ void Timer<Precision>::operate(Func&&  f) {
             }
             state_changed = false;
         }
-        std::cout << "loop end" << std::endl;
     }
 }
 

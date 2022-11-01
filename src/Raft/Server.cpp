@@ -115,7 +115,6 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
 }
 
 void Server::as_candidate() {
-
     /* steps after being a candidate */
     this->state = State::Candidate; //change state.
     ++this->current_term;   // increment term.
