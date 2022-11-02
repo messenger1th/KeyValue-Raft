@@ -41,11 +41,11 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
     printf("candidate[%lu] is calling request_vote, term[%lu], last_log-term[%lu]-index[%lu]\n", candidate_id, term, last_log_term, last_log_index);
 
     VoteResult res{this->current_term, false};
+
     /* 1. Reply false if term < currentTerm (§5.1) */
     if (this->current_term > term) {
         return res;
     } else if (this->current_term < term) {
-        //TODO: should this step after set vote_for to null ? otherwise it vote for the requester if requester has a higher term with appropriate log.e
         update_current_term(term);
     }
 
@@ -55,11 +55,14 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
     }
 
     /* 3. Reply false, if candidate’s log is not at least as up-to-date as receiver’s log (§5.2, §5.4)*/
-    if (this->last_log_term > last_log_term || (this->last_log_term == last_log_term && this->last_log_index > last_log_index)) {
+    const auto last_log_info = get_last_log_info();
+    const auto& my_last_log_term = last_log_info.first, &my_last_log_index = last_log_info.second;
+    if (my_last_log_term > last_log_term || (my_last_log_term == last_log_term && my_last_log_index > last_log_index)) {
         return res;
     }
-//    std::cout << "request_vote: resetted " << std::endl;
+
     this->election_timer.restart();
+    //TODO: write log before voting.
     this->vote_for = candidate_id;
     res.vote_granted = true;
     return res;
@@ -68,13 +71,8 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
 AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term,
                                     const string &entries, size_t leader_commit) {
     AppendResult res{this->current_term, false};
-    if (this->id == 3) {
-        printf("Leader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term,res.success);
-//        return res;
-    };
-
     if (this->current_term > term) {
-        printf("Leader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term,res.success);
+        printf("1Leader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term,res.success);
         return res;
     } else if (this->current_term  < term) {
         update_current_term(term);
@@ -85,14 +83,14 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
 
     // step2: Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm (§5.3)
     if (!match_prev_log_term(prev_log_index, prev_log_term)) {
-        printf("Leader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term,res.success);
+        printf("2Leader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term,res.success);
         return res;
     }
 
 
     /* step3: If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it (§5.3) */
     if (log_conflict(prev_log_index, prev_log_term)) {
-        printf("Server[%lu]: Log[%lu] Conflicts \n", this->id, last_log_index);
+        printf("Server[%lu]: Log[%lu] Conflicts \n", this->id, prev_log_term);
         remove_conflict_logs(prev_log_index);
     }
 
@@ -103,18 +101,17 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
 
     /* Step5: If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry) */
     if (leader_commit > commit_index) {
-        this->commit_index = min(leader_commit, last_log_index);
+        //TODO: write log before commit;
+        this->commit_index = leader_commit;
         if (this->last_applied < this->commit_index) {
-
-            this->last_applied = this->commit_index; cout << "change start a apply thread" << endl;
-
-//            thread t(&Server::apply_entries, this);
-            //TODO: for application layer, start a thread to increment & applied to state machine.
+            this->last_applied = this->commit_index;
+            /* for application layer, start a thread to increment & applied to state machine. */
+            thread t(&Server::apply_entries, this); t.detach();
         }
     }
 
     res.success = true;
-    printf("Leader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term, res.success);
+    printf("sLeader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term, res.success);
     return res;
 }
 
@@ -198,24 +195,11 @@ std::string Server::Hello(size_t id)  {
 }
 
 
-void Server::remove_conflict_logs(size_t index) {
-    //TODO: binary search the logs, rather than just remove it all ?
-    //TODO: update it after change way of log store.
-    cout << "size: " << index - logs[0].index + 1 << endl;
-    this->logs.resize(index - logs[0].index + 1);
-}
-
 void Server::append_logs(const vector<LogEntry>& entries) {
     std::unique_lock<std::shared_mutex> append_logs_lock(this->logs_mutex);
     for (const auto& entry: entries) {
         this->logs.emplace_back(entry);
     }
-
-    // TODO 1: update it after log compaction,
-    // TODO 2: use a lock to read ?
-    this->last_log_term = logs.back().term;
-    this->last_log_index = logs.back().index;
-    printf("current_last_log_info-size[%lu]-term[%lu]-index[%lu]\n", this->logs.size(), last_log_term, last_log_index);
 }
 
 void Server::send_log_heartbeat(size_t server_id) {
@@ -237,12 +221,10 @@ void Server::send_log_heartbeat(size_t server_id) {
 
         if (append_result.success) {
             next_index[server_id] += send_log_size;
-            //TODO: should update matchIndex ?
             match_index[server_id] = prev_log_index + send_log_size;
             printf("Term[%lu] Send append_entry to %lu, Response: %d , next_index: [%lu], matchIndex[%lu]\n", this->current_term, server_id, append_result.success, next_index[server_id], match_index[server_id].load());
             if (match_index[server_id] > commit_index) {
-                //todo: finish this following step
-                printf("find_match_index_median->[%lu], server[%lu]'s[%lu], Leader->commit_index[%lu]\n", find_match_index_median(), server_id, match_index[server_id].load(), this->commit_index);
+//                printf("find_match_index_median->[%lu], server[%lu]'s[%lu], Leader->commit_index[%lu]\n", find_match_index_median(), server_id, match_index[server_id].load(), this->commit_index);
                 update_commit_index(find_match_index_median());
             }
         } else {
@@ -257,7 +239,7 @@ void Server::send_log_heartbeat(size_t server_id) {
             }
         }
         /* send heartbeat periodically. */
-        std::this_thread::sleep_for(std::chrono::milliseconds(delay / 3 ));
+        std::this_thread::sleep_for(std::chrono::milliseconds(delay / 3));
     }
 }
 

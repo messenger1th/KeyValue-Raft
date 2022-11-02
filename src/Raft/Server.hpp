@@ -98,16 +98,12 @@ private: /* Data mentioned in paper. */
     std::vector<LogEntry> logs{LogEntry()}; // start from 1.
 
     /* volatile part */
-    std::mutex commit_index_mutex; //TODO: this only for leader commit_index;
+    std::mutex commit_index_mutex; // this only for leader's commit_index updated by multi thread.
     size_t commit_index{0};
     size_t last_applied{0};
 
 
 private: /* extra information*/
-
-    /* Log Part */
-    size_t last_log_term{0};
-    size_t last_log_index{0};
 
     /* dynamically change when member change */
     size_t majority_count{2};
@@ -135,11 +131,11 @@ private: /* extra information*/
     unordered_map<size_t, size_t> next_index;
     unordered_map<size_t, atomic<size_t>> match_index;
 
-
 private:
 
     /* when receive more up-to-date term, update current_term & be a follower*/
     void update_current_term(size_t term) {
+        //TODO: write log before commit;
         this->vote_for = null;
         this->current_term = term;
         be_follower();
@@ -163,7 +159,7 @@ private:
 
     pair<size_t, size_t> get_last_log_info() {
         std::shared_lock<std::shared_mutex> get_last_log_info_lock(this->logs_mutex);
-        return {last_log_term, last_log_index};
+        return {this->logs.back().term, this->logs.back().index};
     }
 
     size_t get_send_log_size(size_t server_id, bool is_conflict = false) {
@@ -177,19 +173,22 @@ private:
 
 private: /* debug part */
 
+    //TODO: make sure only one thread is applying to state machine,
     void update_commit_index(size_t value) {
+        if (this->get_log_term(value) != this->current_term) {
+            return ;
+        }
         std::unique_lock<std::mutex> lock(this->commit_index_mutex);
         if (value > this->commit_index) {
-            printf("commit_index update success [%lu]->[%lu]\n", this->commit_index, value);
+//            printf("commit_index update success [%lu]->[%lu]\n", this->commit_index, value);
+            commit_index = value;
+//            thread t(&Server::apply_entries, this); t.detach();
         }
-        commit_index = max(this->commit_index, value);
     }
 
     void append_log_simulate() {
-        unique_lock<std::shared_mutex> lock(logs_mutex);
+        std::unique_lock<std::shared_mutex> lock(logs_mutex);
         this->logs.emplace_back(this->current_term, logs.size(), "Hello");
-        this->last_log_term = logs.back().term;
-        this->last_log_index = logs.back().index;
     }
 
     bool find_match_index_median_check(size_t mid) {
@@ -199,7 +198,6 @@ private: /* debug part */
                 ++count;
             }
         }
-
         return count >= majority_count;
     }
 
@@ -213,16 +211,9 @@ private: /* debug part */
         if (l == r) {
             return l;
         }
-        int time = 0;
-
         int res = l;
         while (l <= r) {
-            ++time;
             int mid = (r - l) / 2 + l;
-            if (time > 200) {
-                printf("over: l->%d r->%d mid->%d time: %d, check %d \n", l, r, mid, time, find_match_index_median_check(mid));
-                exit(-1);
-            }
             if (find_match_index_median_check(mid)) {
                 res = mid;
                 l = mid + 1;
@@ -230,14 +221,16 @@ private: /* debug part */
                 r = mid - 1;
             }
         }
-        cout << "\nbinary search:  " << time << endl << endl;
         return res;
     }
 
     std::string get_log_string(size_t start, size_t end) {
         string res;
+        std::shared_lock<std::shared_mutex> get_log_string_lock(this->logs_mutex);
+        size_t start_index = this->logs[0].index;
         for (auto& i = start; i < end; ++i) {
-            res = res + " " + to_string(logs[i].term) + " " + to_string(logs[i].index) + " " + logs[i].command;
+            const auto& log = logs[i - start_index];
+            res += " " + to_string(log.term) + " " + to_string(log.index) + " " + log.command;
         }
         return res;
     }
@@ -254,10 +247,12 @@ private: /* debug part */
 
     vector<string> get_logs_command(size_t start_index, size_t end_index) {
         vector<string> commands;
-        std::shared_lock<std::shared_mutex> log_lock(this->logs_mutex);
-        //todo: udpate it later after log compaction.
-        for (size_t i = start_index; i < end_index; ++i) {
-            commands.emplace_back(logs[i].command);
+        {
+            std::shared_lock<std::shared_mutex> log_lock(this->logs_mutex);
+            size_t log_start_index = logs[0].index;
+            for (size_t i = start_index; i < end_index; ++i) {
+                commands.emplace_back(logs[i - log_start_index].command);
+            }
         }
         return commands;
     }
@@ -271,8 +266,9 @@ private: /* debug part */
     }
 
     size_t get_log_term(size_t index) {
-        //TODO: update it after log compaction(use base + offset)
-        return logs[index].term;
+        std::shared_lock<std::shared_mutex> get_log_term_lock(this->logs_mutex);
+        size_t start_index = this->logs[0].index;
+        return logs[index - start_index].term;
     }
 
     bool match_prev_log_term(size_t index, size_t term) {
@@ -280,16 +276,17 @@ private: /* debug part */
     }
 
     size_t get_total_log_size() {
-        //TODO: update it after log compaction(use base + size());
-        return logs.size();
+        return logs[0].index + logs.size();
     }
 
     bool log_conflict(size_t index, size_t term)  {
-        //TODO: update if after change way of log store.
         return get_log_term(index) != term;
     }
 
-    void remove_conflict_logs(size_t index);
+    void remove_conflict_logs(size_t index)  {
+        std::unique_lock<std::shared_mutex> remove_conflict_logs_lock(this->logs_mutex);
+        this->logs.resize(index - logs[0].index + 1);
+    }
 
     void append_logs(const vector<LogEntry>& entries);
 };
