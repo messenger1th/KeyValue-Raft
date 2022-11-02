@@ -67,8 +67,12 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
 
 AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term,
                                     const string &entries, size_t leader_commit) {
-    cout << "111 "<< endl;
     AppendResult res{this->current_term, false};
+    if (this->id == 3) {
+        printf("Leader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term,res.success);
+//        return res;
+    };
+
     if (this->current_term > term) {
         printf("Leader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term,res.success);
         return res;
@@ -115,12 +119,19 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
 }
 
 void Server::as_candidate() {
+    if (this->id == 3) {
+        cout << "You can't be candidate." << endl;
+        return;
+    }
+
     /* steps after being a candidate */
     this->state = State::Candidate; //change state.
     ++this->current_term;   // increment term.
     election_timer.restart(); // start a new election timer.
     size_t vote_count = 1;  // vote for self.
     this->vote_for = this->id;
+
+
 
     auto size = get_total_log_size();
     auto last_log_info = get_last_log_info();
@@ -230,7 +241,8 @@ void Server::send_log_heartbeat(size_t server_id) {
             match_index[server_id] = prev_log_index + send_log_size;
             printf("Term[%lu] Send append_entry to %lu, Response: %d , next_index: [%lu], matchIndex[%lu]\n", this->current_term, server_id, append_result.success, next_index[server_id], match_index[server_id].load());
             if (match_index[server_id] > commit_index) {
-                update_commit_index(find_match_index_median());
+                //todo: finish this following step
+//                update_commit_index(find_match_index_median());
             }
         } else {
             /* decrement nextIndex and retry; */
