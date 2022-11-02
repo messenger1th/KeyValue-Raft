@@ -38,7 +38,7 @@ void Server::starts_up() {
 
 VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_log_index, size_t last_log_term) {
 
-    printf("candidate[%lu] is calling request_vote, term[%lu], last_log-term[%lu]-index[%lu]\n", candidate_id, term, this->last_log_term, this->last_log_index);
+    printf("candidate[%lu] is calling request_vote, term[%lu], last_log-term[%lu]-index[%lu]\n", candidate_id, term, last_log_term, last_log_index);
 
     VoteResult res{this->current_term, false};
     /* 1. Reply false if term < currentTerm (§5.1) */
@@ -58,7 +58,7 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
     if (this->last_log_term > last_log_term || (this->last_log_term == last_log_term && this->last_log_index > last_log_index)) {
         return res;
     }
-
+    std::cout << "request_vote: resetted " << std::endl;
     this->election_timer.restart();
     this->vote_for = candidate_id;
     res.vote_granted = true;
@@ -67,7 +67,7 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
 
 AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term,
                                     const string &entries, size_t leader_commit) {
-
+    cout << "111 "<< endl;
     AppendResult res{this->current_term, false};
     if (this->current_term > term) {
         printf("Leader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term,res.success);
@@ -94,12 +94,17 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
 
 
     /* step4: Append any new entries not already in the logAppend any new entries not already in the log */
-    append_logs(parse_string_logs(entries));
+    auto appending_entries = parse_string_logs(entries);
+    append_logs(appending_entries);
 
     /* Step5: If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry) */
     if (leader_commit > commit_index) {
         this->commit_index = min(leader_commit, last_log_index);
         if (this->last_applied < this->commit_index) {
+
+            this->last_applied = this->commit_index; cout << "change start a apply thread" << endl;
+
+//            thread t(&Server::apply_entries, this);
             //TODO: for application layer, start a thread to increment & applied to state machine.
         }
     }
@@ -117,12 +122,14 @@ void Server::as_candidate() {
     size_t vote_count = 1;  // vote for self.
     this->vote_for = this->id;
 
-    printf("server[%lu] I' m a candidate, term: %lu\n", this->id, this->current_term);
+    auto size = get_total_log_size();
+    auto last_log_info = get_last_log_info();
+    printf("server[%lu] I' m a candidate, term: %lu, logs-size[%lu]--last-term[%lu]-index[%lu]\n", this->id, this->current_term, size, last_log_info.first, last_log_info.second);
 
     //TODO: make this step in parallel
     for (const auto& [server_id, ptr]: other_server_connections) {
-        ptr->set_timeout(election_timer_base.count() / 2 );
-        VoteResult vote_result = ptr->call<VoteResult>("request_vote", this->current_term, this->id, 0, 0).val();
+        auto last_log_info = get_last_log_info();
+        VoteResult vote_result = ptr->call<VoteResult>("request_vote", this->current_term, this->id, last_log_info.first, last_log_info.second).val();
         vote_count += vote_result.vote_granted ? 1 : 0;
         if (vote_result.vote_granted) {
             printf("%lu vote me(Server[%lu])\n", server_id, this->id);
@@ -150,18 +157,18 @@ void Server::as_leader() {
         match_index[server_id] = 0;
     }
 
-    printf("server[%lu] I' m a leader, term: %lu \n", this->id, this->current_term);
+    printf("server[%lu] I' m a leader, term: %lu, log_size[%lu]-last_index[%lu]\n", this->id, this->current_term,this->logs.size(), this->logs.back().index);
 
     for (const auto& [server_id, ptr]: other_server_connections) {
         thread t(&Server::send_log_heartbeat, this, server_id);
         t.detach();
     }
 
+    printf("send threads created. simulated log append. \n");
+
     //TODO: delete it after developed client.
     while (this->state == State::Leader) {
-        for (int i = 0; i < 1; ++i) {
-            append_log_simulate();
-        }
+        append_log_simulate();
         std::this_thread::sleep_for(std::chrono::milliseconds(delay / 3 * 2));
     }
 }
@@ -188,8 +195,7 @@ void Server::remove_conflict_logs(size_t index) {
 }
 
 void Server::append_logs(const vector<LogEntry>& entries) {
-    //TODO: this should be a incorrect conclusion ?
-    /* actually, this function doesn't need to lock logs because only Leader RPC will append log, namely without data race. */
+    std::unique_lock<std::shared_mutex> append_logs_lock(this->logs_mutex);
     for (const auto& entry: entries) {
         this->logs.emplace_back(entry);
     }
@@ -224,7 +230,7 @@ void Server::send_log_heartbeat(size_t server_id) {
             match_index[server_id] = prev_log_index + send_log_size;
             printf("Term[%lu] Send append_entry to %lu, Response: %d , next_index: [%lu], matchIndex[%lu]\n", this->current_term, server_id, append_result.success, next_index[server_id], match_index[server_id].load());
             if (match_index[server_id] > commit_index) {
-                //todo: use binary search to find the medium.
+                update_commit_index(find_match_index_median());
             }
         } else {
             /* decrement nextIndex and retry; */
@@ -237,6 +243,7 @@ void Server::send_log_heartbeat(size_t server_id) {
                 printf("server[%lu]: crash down! \n", server_id);
             }
         }
+        /* send heartbeat periodically. */
         std::this_thread::sleep_for(std::chrono::milliseconds(delay / 3 * 2));
     }
 }

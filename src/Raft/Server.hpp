@@ -24,6 +24,8 @@ using std::cout, std::endl;
 using ms = std::chrono::milliseconds;
 using s = std::chrono::seconds;
 
+/* provided by application layer */
+void execute_command(const string& command);
 
 constexpr auto delay = 1000;
 constexpr size_t null = 0;
@@ -93,18 +95,18 @@ private: /* Data mentioned in paper. */
     size_t current_term{0};
     size_t vote_for{null};
 
-    std::shared_mutex logs_m;
+    std::shared_mutex logs_mutex;
     std::vector<LogEntry> logs{LogEntry()}; // start from 1.
 
     /* volatile part */
     size_t commit_index{0};
     size_t last_applied{0};
+    std::mutex commit_index_mutex;
 
 
 private: /* extra information*/
 
     /* Log Part */
-    std::mutex last_log_m;
     size_t last_log_term{0};
     size_t last_log_index{0};
 
@@ -124,7 +126,6 @@ private: /* extra information*/
     /* election timer relevant function */
     void start_election_timer();
 
-    /* id -> ip:port */
     size_t id;
 
     /* connection information of other server */
@@ -133,7 +134,7 @@ private: /* extra information*/
 
     /* leader unique*/
     unordered_map<size_t, size_t> next_index;
-    unordered_map<size_t, atomic<size_t>> match_index; //TODO: what is this for ?
+    unordered_map<size_t, atomic<size_t>> match_index;
 
 
 private:
@@ -162,7 +163,7 @@ private:
     }
 
     pair<size_t, size_t> get_last_log_info() {
-        std::shared_lock<std::shared_mutex> lock{this->logs_m};
+        std::shared_lock<std::shared_mutex> get_last_log_info_lock(this->logs_mutex);
         return {last_log_term, last_log_index};
     }
 
@@ -176,8 +177,6 @@ private:
 
 
 private: /* debug part */
-    /* */
-
 
     /* simulated client RPQ request */
 
@@ -190,15 +189,29 @@ private: /* debug part */
     }
 
 
+    void update_commit_index(size_t value) {
+        std::unique_lock<std::mutex> lock(this->commit_index_mutex);
+        if (value > this->commit_index) {
+            printf("commit_index update success [%lu]->[%lu]", this->commit_index, value);
+        }
+        commit_index = max(this->commit_index, value);
+    }
+
     void append_log_simulate() {
-        unique_lock<std::shared_mutex> lock(logs_m);
+        unique_lock<std::shared_mutex> lock(logs_mutex);
         this->logs.emplace_back(this->current_term, logs.size(), "Hello");
         this->last_log_term = logs.back().term;
         this->last_log_index = logs.back().index;
     }
 
     bool find_match_index_median_check(size_t mid) {
-
+        int count = 0;
+        for (const auto& [k, v]: this->match_index) {
+            if (v >= mid) {
+                ++count;
+            }
+        }
+        return count >= majority_count;
     }
 
     size_t find_match_index_median() {
@@ -241,6 +254,24 @@ private: /* debug part */
             res.emplace_back(entry);
         }
         return res;
+    }
+
+    vector<string> get_logs_command(size_t start_index, size_t end_index) {
+        vector<string> commands;
+        std::shared_lock<std::shared_mutex> log_lock(this->logs_mutex);
+        //todo: udpate it later after log compaction.
+        for (size_t i = start_index; i < end_index; ++i) {
+            commands.emplace_back(logs[i].command);
+        }
+        return commands;
+    }
+
+    void apply_entries() {
+        vector<string> commands = get_logs_command(this->last_applied + 1, this->commit_index + 1);
+        for (const auto& command: commands) {
+            execute_command(command);
+        }
+        this->last_applied += commands.size();
     }
 
     size_t get_log_term(size_t index) {
