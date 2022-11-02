@@ -8,13 +8,18 @@
 #include <stdbool.h>
 #include <csignal>
 
+LogEntry::LogEntry(size_t term, size_t index, const string &command) : term(term), index(index), command(command) {}
+
+
+
+
 Server::Server(size_t id, const std::string &pair) : Server(id, pair.substr(0, pair.find(':')),
                                                             std::stoul(pair.substr(pair.find(':') + 1))) {}
 
 Server::Server(size_t id, const std::string &IP, const size_t &port):
     id(id)
 {
-    //TODO
+    //TODO: do something at constructor.
 }
 
 
@@ -102,6 +107,7 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
     /* Step5: If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry) */
     if (leader_commit > commit_index) {
         //TODO: write log before commit;
+        write_log();
         this->commit_index = leader_commit;
         if (this->last_applied < this->commit_index) {
             this->last_applied = this->commit_index;
@@ -244,8 +250,12 @@ void Server::send_log_heartbeat(size_t server_id) {
 }
 
 
-LogEntry::LogEntry(size_t term, size_t index, const string &command) : term(term), index(index), command(command) {}
 ostream& operator<<(ostream& out, const LogEntry& entry) {
-    out << entry.term << ' ' << entry.index << ' ' << entry.command;
+    out << entry.term << ' ' << entry.index << ' ' << entry.command << endl;
     return out;
+}
+
+istream& operator>>(istream& in, LogEntry& entry) {
+    in >> entry.term >> entry.index >> entry.command;
+    return in;
 }

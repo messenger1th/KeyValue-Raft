@@ -16,6 +16,7 @@
 /* debug */
 #include <iostream>
 #include <queue>
+#include <fstream>
 
 
 using std::cout, std::endl;
@@ -36,7 +37,7 @@ class LogEntry {
 public:
     size_t term{0};
     size_t index{0};
-    std::string command{""};
+    std::string command{"Hello"};
 
     LogEntry() = default;
     LogEntry(size_t term, size_t index, const string &command);
@@ -257,14 +258,6 @@ private: /* debug part */
         return commands;
     }
 
-    void apply_entries() {
-        vector<string> commands = get_logs_command(this->last_applied + 1, this->commit_index + 1);
-        for (const auto& command: commands) {
-            execute_command(command);
-        }
-        this->last_applied += commands.size();
-    }
-
     size_t get_log_term(size_t index) {
         std::shared_lock<std::shared_mutex> get_log_term_lock(this->logs_mutex);
         size_t start_index = this->logs[0].index;
@@ -289,6 +282,38 @@ private: /* debug part */
     }
 
     void append_logs(const vector<LogEntry>& entries);
+
+    void apply_entries() {
+        vector<string> commands = get_logs_command(this->last_applied + 1, this->commit_index + 1);
+        for (const auto& command: commands) {
+            execute_command(command);
+        }
+        this->last_applied += commands.size();
+    }
+
+    void write_log() {
+        const string file_name = "log" + to_string(this->id);
+        ofstream log_writer(file_name, ios::app);
+        {
+            std::unique_lock<std::shared_mutex> write_log_lock(this->logs_mutex);
+            for (size_t i = 1; i < logs.size(); ++i) {
+                log_writer << logs[i];
+            }
+        }
+        log_writer.close();
+    }
+
+    void load_log() {
+        const string file_name = "log" + to_string(this->id);
+        ifstream  log_loader(file_name);
+        {
+            std::unique_lock<std::shared_mutex> load_log_lock(this->logs_mutex);
+            LogEntry Temp;
+            while (log_loader >> Temp) {
+
+            }
+        }
+    }
 };
 
 
