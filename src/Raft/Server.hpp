@@ -40,7 +40,6 @@ public:
 
     LogEntry() = default;
     LogEntry(size_t term, size_t index, const string &command);
-
 };
 
 ostream& operator<<(ostream& out, const LogEntry& entry);
@@ -99,9 +98,9 @@ private: /* Data mentioned in paper. */
     std::vector<LogEntry> logs{LogEntry()}; // start from 1.
 
     /* volatile part */
+    std::mutex commit_index_mutex; //TODO: this only for leader commit_index;
     size_t commit_index{0};
     size_t last_applied{0};
-    std::mutex commit_index_mutex;
 
 
 private: /* extra information*/
@@ -178,21 +177,10 @@ private:
 
 private: /* debug part */
 
-    /* simulated client RPQ request */
-
-    void simulate_client() {
-
-    }
-
-    void client_server(vector<size_t>& next_index, vector<size_t>& match_index) {
-
-    }
-
-
     void update_commit_index(size_t value) {
         std::unique_lock<std::mutex> lock(this->commit_index_mutex);
         if (value > this->commit_index) {
-            printf("commit_index update success [%lu]->[%lu]", this->commit_index, value);
+            printf("commit_index update success [%lu]->[%lu]\n", this->commit_index, value);
         }
         commit_index = max(this->commit_index, value);
     }
@@ -205,29 +193,36 @@ private: /* debug part */
     }
 
     bool find_match_index_median_check(size_t mid) {
-        int count = 0;
+        int count = 1; // 1: the leader one.
         for (const auto& [k, v]: this->match_index) {
             if (v >= mid) {
                 ++count;
             }
         }
+
         return count >= majority_count;
     }
 
     size_t find_match_index_median() {
-        size_t l = min_element(match_index.begin(), match_index.end(), [] (const auto& p1, const auto& p2) ->bool {
+        int l = min_element(match_index.begin(), match_index.end(), [] (const auto& p1, const auto& p2) ->bool {
             return p1.second < p2.second;
         })->second;
-        size_t r = max_element(match_index.begin(), match_index.end(), [] (const auto& p1, const auto& p2) ->bool {
+        int r = max_element(match_index.begin(), match_index.end(), [] (const auto& p1, const auto& p2) ->bool {
             return p1.second < p2.second;
         })->second;
         if (l == r) {
             return l;
         }
+        int time = 0;
 
         int res = l;
         while (l <= r) {
-            int mid = (r - l + 1) / 2;
+            ++time;
+            int mid = (r - l) / 2 + l;
+            if (time > 200) {
+                printf("over: l->%d r->%d mid->%d time: %d, check %d \n", l, r, mid, time, find_match_index_median_check(mid));
+                exit(-1);
+            }
             if (find_match_index_median_check(mid)) {
                 res = mid;
                 l = mid + 1;
@@ -235,6 +230,7 @@ private: /* debug part */
                 r = mid - 1;
             }
         }
+        cout << "\nbinary search:  " << time << endl << endl;
         return res;
     }
 

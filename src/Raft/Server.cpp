@@ -58,7 +58,7 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
     if (this->last_log_term > last_log_term || (this->last_log_term == last_log_term && this->last_log_index > last_log_index)) {
         return res;
     }
-    std::cout << "request_vote: resetted " << std::endl;
+//    std::cout << "request_vote: resetted " << std::endl;
     this->election_timer.restart();
     this->vote_for = candidate_id;
     res.vote_granted = true;
@@ -242,7 +242,8 @@ void Server::send_log_heartbeat(size_t server_id) {
             printf("Term[%lu] Send append_entry to %lu, Response: %d , next_index: [%lu], matchIndex[%lu]\n", this->current_term, server_id, append_result.success, next_index[server_id], match_index[server_id].load());
             if (match_index[server_id] > commit_index) {
                 //todo: finish this following step
-//                update_commit_index(find_match_index_median());
+                printf("find_match_index_median->[%lu], server[%lu]'s[%lu], Leader->commit_index[%lu]\n", find_match_index_median(), server_id, match_index[server_id].load(), this->commit_index);
+                update_commit_index(find_match_index_median());
             }
         } else {
             /* decrement nextIndex and retry; */
@@ -256,7 +257,7 @@ void Server::send_log_heartbeat(size_t server_id) {
             }
         }
         /* send heartbeat periodically. */
-        std::this_thread::sleep_for(std::chrono::milliseconds(delay / 3 * 2));
+        std::this_thread::sleep_for(std::chrono::milliseconds(delay / 3 ));
     }
 }
 
