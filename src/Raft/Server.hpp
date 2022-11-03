@@ -6,7 +6,7 @@
 #define MIT6_824_C_SERVER_HPP
 #include <vector>
 #include <cstddef>
-#include <stdlib.h>
+#include <cstdlib>
 #include <string>
 #include <shared_mutex>
 
@@ -44,6 +44,7 @@ public:
 };
 
 ostream& operator<<(ostream& out, const LogEntry& entry);
+istream& operator>>(istream& in, LogEntry& entry);
 
 struct VoteResult {
     size_t term{0};
@@ -291,8 +292,35 @@ private: /* debug part */
         this->last_applied += commands.size();
     }
 
+
+    //TODO: call ant test it.
+    void write_term_info(size_t term, size_t vote_for) {
+        const string file_name = get_log_file_name();
+        ofstream log_writer(file_name);
+        {
+            log_writer << term << " " << vote_for;
+        }
+        log_writer.close();
+    }
+
+    void load_term_info() {
+        const string file_name = get_log_file_name();
+        ifstream log_loader(file_name);
+        {
+            log_loader >> this->current_term >> this->vote_for;
+        }
+        log_loader.close();
+    }
+
+    std::string get_term_info_file_name() {
+        return "term_info" + to_string(this->id) + ".txt";
+    }
+    std::string get_log_file_name() {
+        return "log" + to_string(this->id) + ".txt";
+    }
+
     void write_log() {
-        const string file_name = "log" + to_string(this->id);
+        const string file_name = get_log_file_name();
         ofstream log_writer(file_name, ios::app);
         {
             std::unique_lock<std::shared_mutex> write_log_lock(this->logs_mutex);
@@ -304,7 +332,7 @@ private: /* debug part */
     }
 
     void load_log() {
-        const string file_name = "log" + to_string(this->id);
+        const string file_name = get_log_file_name();
         ifstream  log_loader(file_name);
         {
             std::unique_lock<std::shared_mutex> load_log_lock(this->logs_mutex);
@@ -313,6 +341,7 @@ private: /* debug part */
 
             }
         }
+        log_loader.close();
     }
 };
 
