@@ -68,7 +68,7 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
 
     this->election_timer.restart();
     //TODO: write log before voting.
-    this->vote_for = candidate_id;
+    update_term_info(this->current_term, candidate_id);
     res.vote_granted = true;
     return res;
 }
@@ -107,7 +107,7 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
     /* Step5: If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry) */
     if (leader_commit > commit_index) {
         //TODO: write log before commit;
-        write_log();
+//        write_log();
         this->commit_index = leader_commit;
         if (this->last_applied < this->commit_index) {
             this->last_applied = this->commit_index;
@@ -122,17 +122,12 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
 }
 
 void Server::as_candidate() {
-    if (this->id == 3) {
-        cout << "You can't be candidate." << endl;
-        return;
-    }
 
     /* steps after being a candidate */
     this->state = State::Candidate; //change state.
-    ++this->current_term;   // increment term.
     election_timer.restart(); // start a new election timer.
     size_t vote_count = 1;  // vote for self.
-    this->vote_for = this->id;
+    update_term_info(this->current_term + 1, this->id); //increment term and set vote_for self.
 
 
 
@@ -149,7 +144,7 @@ void Server::as_candidate() {
             printf("%lu vote me(Server[%lu])\n", server_id, this->id);
         }
         if (this->current_term < vote_result.term) {
-            update_current_term(this->current_term);
+            update_current_term(vote_result.term);
             return;
         }
     }

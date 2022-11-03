@@ -137,9 +137,8 @@ private:
 
     /* when receive more up-to-date term, update current_term & be a follower*/
     void update_current_term(size_t term) {
-        //TODO: write log before commit;
-        this->vote_for = null;
-        this->current_term = term;
+        /* write log before commit; */
+        update_term_info(term, null);
         be_follower();
     }
 
@@ -294,17 +293,29 @@ private: /* debug part */
 
 
     //TODO: call ant test it.
+    std::string get_term_info_file_name() {
+        return "term_info" + to_string(this->id) + ".txt";
+    }
+
+    void update_term_info(size_t term, size_t vote_for) {
+        write_term_info(term, vote_for);
+        this->current_term = term;
+        this->vote_for = vote_for;
+    }
+
+
     void write_term_info(size_t term, size_t vote_for) {
-        const string file_name = get_log_file_name();
+        const string file_name = get_term_info_file_name();
         ofstream log_writer(file_name);
         {
             log_writer << term << " " << vote_for;
         }
+        cout << "term written" << endl;
         log_writer.close();
     }
 
     void load_term_info() {
-        const string file_name = get_log_file_name();
+        const string file_name = get_term_info_file_name();
         ifstream log_loader(file_name);
         {
             log_loader >> this->current_term >> this->vote_for;
@@ -312,21 +323,22 @@ private: /* debug part */
         log_loader.close();
     }
 
-    std::string get_term_info_file_name() {
-        return "term_info" + to_string(this->id) + ".txt";
-    }
+
     std::string get_log_file_name() {
         return "log" + to_string(this->id) + ".txt";
     }
 
     void write_log() {
         const string file_name = get_log_file_name();
-        ofstream log_writer(file_name, ios::app);
+        ofstream log_writer(file_name, ifstream::app);
         {
             std::unique_lock<std::shared_mutex> write_log_lock(this->logs_mutex);
             for (size_t i = 1; i < logs.size(); ++i) {
                 log_writer << logs[i];
             }
+            LogEntry new_start_log = logs.back();
+            logs.resize(1);
+            logs[0] = new_start_log;
         }
         log_writer.close();
     }
@@ -336,9 +348,9 @@ private: /* debug part */
         ifstream  log_loader(file_name);
         {
             std::unique_lock<std::shared_mutex> load_log_lock(this->logs_mutex);
-            LogEntry Temp;
-            while (log_loader >> Temp) {
-
+            LogEntry temp;
+            while (log_loader >> temp) {
+                this->logs.emplace_back(temp);
             }
         }
         log_loader.close();
