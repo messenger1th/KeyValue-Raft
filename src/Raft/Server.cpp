@@ -22,8 +22,7 @@ Server::Server(size_t id, const std::string &IP, const size_t &port):
     //TODO: do something at constructor.
 }
 
-
-void Server::read_config() {
+void Server::configure() {
     for (size_t i = 1; i <= 3; ++i) {
         size_t port = i + 5000;
         if (i != this->id) {
@@ -35,7 +34,18 @@ void Server::read_config() {
     }
     election_timer.set_callback(&Server::as_candidate, this);
     load_term_info();
+    load_log();
+
+    /* set default config */
+    set_default_value();
     printf("Configuration Done!\n");
+}
+
+void Server::set_default_value() {
+    if (this->logs.empty()) {
+        logs.emplace_back();
+    }
+    this->commit_index = logs.back().index;
 }
 
 void Server::starts_up() {
@@ -56,7 +66,8 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
     }
 
     /* 2. Reply false, if votedFor is not null or candidateId, */
-    if (this->vote_for != null && this->vote_for != candidate_id) {
+    if (this->
+    vote_for != null && this->vote_for != candidate_id) {
         return res;
     }
 
@@ -107,14 +118,8 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
 
     /* Step5: If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry) */
     if (leader_commit > commit_index) {
-        //TODO: write log before commit;
-//        write_log();
-        this->commit_index = leader_commit;
-        if (this->last_applied < this->commit_index) {
-            this->last_applied = this->commit_index;
-            /* for application layer, start a thread to increment & applied to state machine. */
-            thread t(&Server::apply_entries, this); t.detach();
-        }
+        update_commit_index(leader_commit);
+        //TODO: notify to apply to state machine after commit.
     }
 
     res.success = true;
@@ -244,6 +249,8 @@ void Server::send_log_heartbeat(size_t server_id) {
         std::this_thread::sleep_for(std::chrono::milliseconds(delay / 3));
     }
 }
+
+
 
 
 ostream& operator<<(ostream& out, const LogEntry& entry) {

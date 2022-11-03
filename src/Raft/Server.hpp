@@ -81,12 +81,12 @@ public:
     AppendResult append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term, const string &entries, size_t leader_commit);
 
 
-
     void as_candidate();    /* be a candidate */
     void as_leader();    /* be a leader */
 
     /* help function*/
-    void read_config();
+    void configure();
+    void set_default_value();
     void starts_up();
 
 
@@ -97,11 +97,12 @@ private: /* Data mentioned in paper. */
     size_t vote_for{null};
 
     std::shared_mutex logs_mutex;
-    std::vector<LogEntry> logs{LogEntry()}; // start from 1.
+    std::vector<LogEntry> logs; // start from 1, if not log backup.
 
     /* volatile part */
     std::mutex commit_index_mutex; // this only for leader's commit_index updated by multi thread.
     size_t commit_index{0};
+    std::mutex last_applied_mutex;
     size_t last_applied{0};
 
 
@@ -129,7 +130,7 @@ private: /* extra information*/
     std::unordered_map<size_t, NetAddress> other_servers;
     std::unordered_map<size_t, unique_ptr<buttonrpc>> other_server_connections;
 
-    /* leader unique*/
+    /* leader unique */
     unordered_map<size_t, size_t> next_index;
     unordered_map<size_t, atomic<size_t>> match_index;
 
@@ -137,7 +138,7 @@ private:
 
     /* when receive more up-to-date term, update current_term & be a follower*/
     void update_current_term(size_t term) {
-        /* write log before commit; */
+        /* write log before change term; */
         update_term_info(term, null);
         be_follower();
     }
@@ -181,8 +182,10 @@ private: /* debug part */
         }
         std::unique_lock<std::mutex> lock(this->commit_index_mutex);
         if (value > this->commit_index) {
+            write_log(this->commit_index + 1, value + 1);
 //            printf("commit_index update success [%lu]->[%lu]\n", this->commit_index, value);
             commit_index = value;
+            //TODO: apply command after commit.
 //            thread t(&Server::apply_entries, this); t.detach();
         }
     }
@@ -283,8 +286,14 @@ private: /* debug part */
 
     void append_logs(const vector<LogEntry>& entries);
 
-    void apply_entries() {
-        vector<string> commands = get_logs_command(this->last_applied + 1, this->commit_index + 1);
+    void apply_state_machine() {
+        size_t current_commit_index;
+        {
+            std::unique_lock<std::mutex> get_commit_index_lock(commit_index_mutex);
+            current_commit_index = this->commit_index;
+        }
+        std::unique_lock<std::mutex> get_last_applied(last_applied_mutex);
+        vector<string> commands = get_logs_command(this->last_applied + 1, current_commit_index + 1);
         for (const auto& command: commands) {
             execute_command(command);
         }
@@ -310,7 +319,6 @@ private: /* debug part */
         {
             log_writer << term << " " << vote_for;
         }
-        cout << "term written" << endl;
         log_writer.close();
     }
 
@@ -328,17 +336,16 @@ private: /* debug part */
         return "log" + to_string(this->id) + ".txt";
     }
 
-    void write_log() {
+    void write_log(size_t committed_log_start_index, size_t committed_log_end_index) {
         const string file_name = get_log_file_name();
         ofstream log_writer(file_name, ifstream::app);
         {
             std::unique_lock<std::shared_mutex> write_log_lock(this->logs_mutex);
-            for (size_t i = 1; i < logs.size(); ++i) {
+            size_t start_index = committed_log_start_index - logs[0].index + 0;
+            size_t end_index = start_index + (committed_log_end_index - committed_log_start_index);
+            for (size_t i = start_index; i < end_index; ++i) {
                 log_writer << logs[i];
             }
-            LogEntry new_start_log = logs.back();
-            logs.resize(1);
-            logs[0] = new_start_log;
         }
         log_writer.close();
     }

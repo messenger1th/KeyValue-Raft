@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
     port += id;
 
     Server s(id, ip, port);
-    s.read_config();
+    s.configure();
 
     buttonrpc server_rpc;
     server_rpc.as_server(port);
