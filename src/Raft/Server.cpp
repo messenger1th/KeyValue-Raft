@@ -34,6 +34,7 @@ void Server::read_config() {
         }
     }
     election_timer.set_callback(&Server::as_candidate, this);
+    load_term_info();
     printf("Configuration Done!\n");
 }
 
