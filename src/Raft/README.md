@@ -48,6 +48,17 @@ revert to follower state anytime receives a valid append entry which means a new
 
 
 
+
+
+## Optimize
+
+### Snapshot
+
+* Copy-On-Write
+* Let Leader not install snapshot, but become follower after a period of time initiatively to install snapshot.
+
+
+
 ## Details not Mentioned in Paper
 
 ### When to set `voteFor` to `null` ? 

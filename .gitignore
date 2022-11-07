@@ -7,3 +7,4 @@ cmake-build-*/
 build/
 term_info?.txt
 log?.txt
+last_include_info?.txt

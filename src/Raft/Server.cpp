@@ -35,11 +35,13 @@ void Server::load_connection_configuration() {
             other_server_connections[i]->set_timeout(this->election_timer_base.count() / 2);
         }
     }
+    printf("- server connection done.\n");
 }
 
 void Server::load_persistent_value() {
     load_connection_configuration();
     load_term_info();
+    this->load_snapshot();
     load_log();
 }
 
@@ -51,10 +53,13 @@ void Server::set_default_value() {
 }
 
 void Server::configure() {
+    printf("---- Configuring... \n");
     load_persistent_value(); /* load persistent value from log. */
     set_default_value();     /* set default config. */
     election_timer.set_callback(&Server::as_candidate, this); /* set election callback function. */
-    printf("-- Configuring done!\n");
+    thread apply_thread(&Server::apply_state_machine, this);
+    apply_thread.detach();
+    printf("---- Configuring done!\n");
 }
 
 
@@ -141,6 +146,7 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
     if (leader_commit > commit_index) {
         update_commit_index(leader_commit);
         //TODO: notify to apply to state machine after commit.
+
     }
 
     res.success = true;
@@ -252,8 +258,11 @@ void Server::send_log_heartbeat(size_t server_id) {
             match_index[server_id] = prev_log_index + send_log_size;
             printf("Term[%lu] Send append_entry to %lu, Response: %d , next_index: [%lu], matchIndex[%lu]\n", this->current_term, server_id, append_result.success, next_index[server_id], match_index[server_id].load());
             if (match_index[server_id] > commit_index) {
-//                printf("find_match_index_median->[%lu], server[%lu]'s[%lu], Leader->commit_index[%lu]\n", find_match_index_median(), server_id, match_index[server_id].load(), this->commit_index);
-                update_commit_index(find_match_index_median());
+                size_t new_commit_index = find_match_index_median();
+                /* only commit log in its term. */
+                if (this->get_log_term(new_commit_index) == this->current_term) {
+                    update_commit_index(new_commit_index);
+                }
             }
         } else {
             /* decrement nextIndex and retry; */

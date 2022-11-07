@@ -79,21 +79,67 @@ public:
     VoteResult request_vote(size_t term, size_t candidate_id, size_t last_log_index, size_t last_log_term);
     AppendResult append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term, const string &entries, size_t leader_commit);
 
-
     void as_candidate();    /* be a candidate */
     void as_leader();    /* be a leader */
 
-    /* help function*/
+    /* configuring function before start serve */
     void configure();
     void load_persistent_value();
     void load_connection_configuration();
     void set_default_value();
     void start_serve();
 
+
+    /* application layer */
+    //todo: modify apply function to virtual function after test.
+    virtual void apply(const string& command) {  }
+    virtual void install_snapshot(const string& filename) { /* do nothing. */ }
+    virtual void load_snapshot(const string& filename) { /* do nothing. */ }
+
+private:
+    void load_snapshot() {
+        ifstream reader(get_last_include_info_filename());
+        size_t temp_term, temp_index;
+
+        //todo: modify the way of judging whether the total snapshot has been written correctly or not.
+        if (reader >> temp_term >> temp_index) {
+            this->last_applied = temp_index;
+            this->load_snapshot(get_snapshot_filename());
+            printf("- snapshot done.\n");
+        } else {
+            //TODO: output information.
+            printf("- snapshot warning: no snapshot found. \n");
+        }
+    }
+
 private:
     size_t id;
     size_t port;
     string ip;
+
+private:
+    pair<size_t, size_t> get_last_include_info(const string& filename) {
+        pair<size_t, size_t> res;
+        ifstream reader(filename);
+        reader >> res.first >> res.second;
+        reader.close();
+        return res;
+    }
+
+    string get_snapshot_filename() {
+        return "snapshot" + to_string(this->id) + ".txt";
+    }
+
+    string  get_last_include_info_filename() {
+        return "last_include_info" + to_string(this->id) + ".txt" ;
+    }
+
+    void write_last_include_index(size_t last_include_term, size_t last_include_index) {
+        const string filename = get_last_include_info_filename();
+        ofstream writer(filename);
+        writer << last_include_term << " " << last_include_index;
+        writer.close();
+    }
 
 private: /* Data mentioned in paper. */
 
@@ -110,6 +156,9 @@ private: /* Data mentioned in paper. */
     std::mutex last_applied_mutex;
     size_t last_applied{0};
 
+
+private:
+    std::condition_variable apply_cv;
 
 private: /* extra information*/
 
@@ -177,25 +226,26 @@ private:
 
 
 private: /* debug part */
-
-    //TODO: make sure only one thread is applying to state machine,
+    //TODO: make sure only one thread is applying to state machine, like use condition_variable to notice applying.
     void update_commit_index(size_t value) {
-        if (this->get_log_term(value) != this->current_term) {
-            return ;
+        bool should_notify = false;
+        {
+            std::unique_lock<std::mutex> lock(this->commit_index_mutex);
+            if (value > this->commit_index) {
+                write_log(this->commit_index + 1, value + 1);
+                this->commit_index = value;
+                should_notify = true;
+            }
         }
-        std::unique_lock<std::mutex> lock(this->commit_index_mutex);
-        if (value > this->commit_index) {
-            write_log(this->commit_index + 1, value + 1);
-//            printf("commit_index update success [%lu]->[%lu]\n", this->commit_index, value);
-            commit_index = value;
-            //TODO: apply command after commit.
-//            thread t(&Server::apply_entries, this); t.detach();
+        if (should_notify) {
+            apply_cv.notify_one();
+            std::cout << "notified" << endl;
         }
     }
 
     void append_log_simulate() {
         std::unique_lock<std::shared_mutex> lock(logs_mutex);
-        this->logs.emplace_back(this->current_term, logs.size(), "Hello");
+        this->logs.emplace_back(this->current_term, this->logs.back().index + 1, "Hello");
     }
 
     bool find_match_index_median_check(size_t mid) {
@@ -270,13 +320,21 @@ private: /* debug part */
         return logs[index - start_index].term;
     }
 
+    /* get the index of log array. Please make sure you get the lock of logs when you call it. */
+    size_t get_index(size_t absolute_index) {
+        return absolute_index - logs[0].index + 0;
+    }
+
+    size_t get_total_log_size() {
+        std::shared_lock<std::shared_mutex> get_total_size_lock(this->logs_mutex);
+        return logs[0].index + logs.size();
+    }
+
+
     bool match_prev_log_term(size_t index, size_t term) {
         return get_total_log_size() > index && get_log_term(index) == term;
     }
 
-    size_t get_total_log_size() {
-        return logs[0].index + logs.size();
-    }
 
     bool log_conflict(size_t index, size_t term)  {
         return get_log_term(index) != term;
@@ -289,22 +347,38 @@ private: /* debug part */
 
     void append_logs(const vector<LogEntry>& entries);
 
-    void apply_state_machine() {
-        size_t current_commit_index;
-        {
-            std::unique_lock<std::mutex> get_commit_index_lock(commit_index_mutex);
-            current_commit_index = this->commit_index;
-        }
-        std::unique_lock<std::mutex> get_last_applied(last_applied_mutex);
-        vector<string> commands = get_logs_command(this->last_applied + 1, current_commit_index + 1);
-        for (const auto& command: commands) {
-            execute_command(command);
-        }
-        this->last_applied += commands.size();
+
+    bool snapshot_condition() {
+        //TODO: change the principle of install snapshot.
+        return true;
     }
 
+    void apply_state_machine() {
+        while (true) {
+            std::unique_lock<std::mutex> apply_lock(this->last_applied_mutex);
+            apply_cv.wait(apply_lock, [this] ()->bool {
+                return this->last_applied < this->commit_index;
+            });
+            size_t current_commit_index;
+            {
+                std::unique_lock<std::mutex> get_commit_index_lock(commit_index_mutex);
+                current_commit_index = this->commit_index;
+            }
+            vector<string> commands = get_logs_command(this->last_applied + 1, current_commit_index + 1);
+            for (const auto& command: commands) {
+                //TODO: authority check before pass it to higher layer(application layer).
+                apply(command);
+            }
+            this->last_applied += commands.size();
+            if (snapshot_condition()) {
+                //TODO: actual should write a temp file until the total writing task done, then change it to correct name.
+                this->install_snapshot(get_snapshot_filename());
+                write_last_include_index(this->get_log_term(this->last_applied), this->last_applied);
+                printf("installed snapshot\n",this->last_applied);
+            }
+        }
+    }
 
-    //TODO: call and test it.
     std::string get_term_info_file_name() {
         return "term_info" + to_string(this->id) + ".txt";
     }
@@ -332,6 +406,7 @@ private: /* debug part */
             log_loader >> this->current_term >> this->vote_for;
         }
         log_loader.close();
+        printf("- term&vote_for done.\n");
     }
 
 
@@ -339,13 +414,14 @@ private: /* debug part */
         return "log" + to_string(this->id) + ".txt";
     }
 
+
     void write_log(size_t committed_log_start_index, size_t committed_log_end_index) {
         const string file_name = get_log_file_name();
         ofstream log_writer(file_name, ifstream::app);
         {
             std::unique_lock<std::shared_mutex> write_log_lock(this->logs_mutex);
-            size_t start_index = committed_log_start_index - logs[0].index + 0;
-            size_t end_index = start_index + (committed_log_end_index - committed_log_start_index);
+            size_t start_index = get_index(committed_log_start_index);
+            size_t end_index = get_index(committed_log_end_index);
             for (size_t i = start_index; i < end_index; ++i) {
                 log_writer << logs[i];
             }
@@ -364,6 +440,7 @@ private: /* debug part */
             }
         }
         log_loader.close();
+        printf("- logs done.\n");
     }
 };
 
