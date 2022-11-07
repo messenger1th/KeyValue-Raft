@@ -60,7 +60,7 @@ class NetAddress{
 public:
     NetAddress() = default;
 
-    NetAddress(const string& ip, const size_t& port): ip(ip), port(port) {}
+    NetAddress(const string& ip, size_t port): ip(ip), port(port) {}
     std::string ip;
     size_t port;
 };
@@ -76,7 +76,6 @@ public:
 
     /* RPC */
     std::string Hello(size_t id);
-
     VoteResult request_vote(size_t term, size_t candidate_id, size_t last_log_index, size_t last_log_term);
     AppendResult append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term, const string &entries, size_t leader_commit);
 
@@ -86,9 +85,15 @@ public:
 
     /* help function*/
     void configure();
+    void load_persistent_value();
+    void load_connection_configuration();
     void set_default_value();
-    void starts_up();
+    void start_serve();
 
+private:
+    size_t id;
+    size_t port;
+    string ip;
 
 private: /* Data mentioned in paper. */
 
@@ -123,8 +128,6 @@ private: /* extra information*/
 
     /* election timer relevant function */
     void start_election_timer();
-
-    size_t id;
 
     /* connection information of other server */
     std::unordered_map<size_t, NetAddress> other_servers;
@@ -301,7 +304,7 @@ private: /* debug part */
     }
 
 
-    //TODO: call ant test it.
+    //TODO: call and test it.
     std::string get_term_info_file_name() {
         return "term_info" + to_string(this->id) + ".txt";
     }

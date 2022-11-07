@@ -17,12 +17,15 @@ Server::Server(size_t id, const std::string &pair) : Server(id, pair.substr(0, p
                                                             std::stoul(pair.substr(pair.find(':') + 1))) {}
 
 Server::Server(size_t id, const std::string &IP, const size_t &port):
-    id(id)
+    id(id),
+    ip(IP),
+    port(port)
 {
     //TODO: do something at constructor.
 }
 
-void Server::configure() {
+
+void Server::load_connection_configuration() {
     for (size_t i = 1; i <= 3; ++i) {
         size_t port = i + 5000;
         if (i != this->id) {
@@ -32,13 +35,12 @@ void Server::configure() {
             other_server_connections[i]->set_timeout(this->election_timer_base.count() / 2);
         }
     }
-    election_timer.set_callback(&Server::as_candidate, this);
+}
+
+void Server::load_persistent_value() {
+    load_connection_configuration();
     load_term_info();
     load_log();
-
-    /* set default config */
-    set_default_value();
-    printf("Configuration Done!\n");
 }
 
 void Server::set_default_value() {
@@ -48,8 +50,28 @@ void Server::set_default_value() {
     this->commit_index = logs.back().index;
 }
 
-void Server::starts_up() {
+void Server::configure() {
+    load_persistent_value(); /* load persistent value from log. */
+    set_default_value();     /* set default config. */
+    election_timer.set_callback(&Server::as_candidate, this); /* set election callback function. */
+    printf("-- Configuring done!\n");
+}
+
+
+/* will block here*/
+void Server::start_serve() {
+    configure();
+
+    buttonrpc server_rpc;
+    server_rpc.as_server(this->port);
+    server_rpc.bind("Hello", &Server::Hello, this);
+    server_rpc.bind("request_vote", &Server::request_vote, this);
+    server_rpc.bind("append_entries", &Server::append_entries, this);
+
     start_election_timer();
+
+    /* will block here*/
+    server_rpc.run();
 }
 
 VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_log_index, size_t last_log_term) {
@@ -79,7 +101,6 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
     }
 
     this->election_timer.restart();
-    //TODO: write log before voting.
     update_term_info(this->current_term, candidate_id);
     res.vote_granted = true;
     return res;
