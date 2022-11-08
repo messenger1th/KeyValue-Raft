@@ -5,6 +5,10 @@ build-vs2015/buttonrpc-demo/buttonrpc-demo.VC.db
 *.iobj
 cmake-build-*/
 build/
+
+
+#temp file: logs or snapshot
 term_info?.txt
 log?.txt
 last_include_info?.txt
+snapshot?.txt
