@@ -2,8 +2,8 @@
 // Created by epoch on 10/24/22.
 //
 
-#ifndef MIT6_824_C_SERVER_HPP
-#define MIT6_824_C_SERVER_HPP
+#ifndef MIT6_824_C_RAFT_HPP
+#define MIT6_824_C_RAFT_HPP
 #include <vector>
 #include <cstddef>
 #include <cstdlib>
@@ -66,13 +66,13 @@ public:
 };
 
 
-class Server {
+class Raft {
 public:
     enum class State {Follower, Candidate, Leader};
 
     /*format: ip:port, like "127.0.0.1:5555" */
-    Server(size_t id, const std::string &pair);
-    Server(size_t id, const std::string &IP, const size_t &port);
+    Raft(size_t id, const std::string &pair);
+    Raft(size_t id, const std::string &IP, const size_t &port);
 
     /* RPC */
     std::string Hello(size_t id);
@@ -239,7 +239,6 @@ private: /* debug part */
         }
         if (should_notify) {
             apply_cv.notify_one();
-            std::cout << "notified" << endl;
         }
     }
 
@@ -350,7 +349,8 @@ private: /* debug part */
 
     bool snapshot_condition() {
         //TODO: change the principle of install snapshot.
-        return true;
+
+        return this->last_applied > 0 &&  this->last_applied % 10 == 0;
     }
 
     void apply_state_machine() {
@@ -374,7 +374,6 @@ private: /* debug part */
                 //TODO: actual should write a temp file until the total writing task done, then change it to correct name.
                 this->install_snapshot(get_snapshot_filename());
                 write_last_include_index(this->get_log_term(this->last_applied), this->last_applied);
-                printf("installed snapshot\n",this->last_applied);
             }
         }
     }
@@ -445,4 +444,4 @@ private: /* debug part */
 };
 
 
-#endif //MIT6_824_C_SERVER_HPP
+#endif //MIT6_824_C_RAFT_HPP

@@ -2,7 +2,7 @@
 // Created by epoch on 10/24/22.
 //
 
-#include "Server.hpp"
+#include "Raft.hpp"
 
 //TODO:delete it;
 #include <stdbool.h>
@@ -13,10 +13,10 @@ LogEntry::LogEntry(size_t term, size_t index, const string &command) : term(term
 
 
 
-Server::Server(size_t id, const std::string &pair) : Server(id, pair.substr(0, pair.find(':')),
-                                                            std::stoul(pair.substr(pair.find(':') + 1))) {}
+Raft::Raft(size_t id, const std::string &pair) : Raft(id, pair.substr(0, pair.find(':')),
+                                                      std::stoul(pair.substr(pair.find(':') + 1))) {}
 
-Server::Server(size_t id, const std::string &IP, const size_t &port):
+Raft::Raft(size_t id, const std::string &IP, const size_t &port):
     id(id),
     ip(IP),
     port(port)
@@ -25,7 +25,7 @@ Server::Server(size_t id, const std::string &IP, const size_t &port):
 }
 
 
-void Server::load_connection_configuration() {
+void Raft::load_connection_configuration() {
     for (size_t i = 1; i <= 3; ++i) {
         size_t port = i + 5000;
         if (i != this->id) {
@@ -38,40 +38,40 @@ void Server::load_connection_configuration() {
     printf("- server connection done.\n");
 }
 
-void Server::load_persistent_value() {
+void Raft::load_persistent_value() {
     load_connection_configuration();
     load_term_info();
-    this->load_snapshot();
+    load_snapshot();
     load_log();
 }
 
-void Server::set_default_value() {
+void Raft::set_default_value() {
     if (this->logs.empty()) {
         logs.emplace_back();
     }
     this->commit_index = logs.back().index;
 }
 
-void Server::configure() {
+void Raft::configure() {
     printf("---- Configuring... \n");
     load_persistent_value(); /* load persistent value from log. */
     set_default_value();     /* set default config. */
-    election_timer.set_callback(&Server::as_candidate, this); /* set election callback function. */
-    thread apply_thread(&Server::apply_state_machine, this);
+    election_timer.set_callback(&Raft::as_candidate, this); /* set election callback function. */
+    thread apply_thread(&Raft::apply_state_machine, this);
     apply_thread.detach();
     printf("---- Configuring done!\n");
 }
 
 
 /* will block here*/
-void Server::start_serve() {
+void Raft::start_serve() {
     configure();
 
     buttonrpc server_rpc;
     server_rpc.as_server(this->port);
-    server_rpc.bind("Hello", &Server::Hello, this);
-    server_rpc.bind("request_vote", &Server::request_vote, this);
-    server_rpc.bind("append_entries", &Server::append_entries, this);
+    server_rpc.bind("Hello", &Raft::Hello, this);
+    server_rpc.bind("request_vote", &Raft::request_vote, this);
+    server_rpc.bind("append_entries", &Raft::append_entries, this);
 
     start_election_timer();
 
@@ -79,7 +79,7 @@ void Server::start_serve() {
     server_rpc.run();
 }
 
-VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_log_index, size_t last_log_term) {
+VoteResult Raft::request_vote(size_t term, size_t candidate_id, size_t last_log_index, size_t last_log_term) {
 
     printf("candidate[%lu] is calling request_vote, term[%lu], last_log-term[%lu]-index[%lu]\n", candidate_id, term, last_log_term, last_log_index);
 
@@ -111,8 +111,8 @@ VoteResult Server::request_vote(size_t term, size_t candidate_id, size_t last_lo
     return res;
 }
 
-AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term,
-                                    const string &entries, size_t leader_commit) {
+AppendResult Raft::append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term,
+                                  const string &entries, size_t leader_commit) {
     AppendResult res{this->current_term, false};
     if (this->current_term > term) {
         printf("1Leader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term,res.success);
@@ -154,7 +154,7 @@ AppendResult Server::append_entries(size_t term, size_t leader_id, size_t prev_l
     return res;
 }
 
-void Server::as_candidate() {
+void Raft::as_candidate() {
 
     /* steps after being a candidate */
     this->state = State::Candidate; //change state.
@@ -188,7 +188,7 @@ void Server::as_candidate() {
     }
 }
 
-void Server::as_leader() {
+void Raft::as_leader() {
     /* stop election_timer  */
     election_timer.stop();
     auto next_log_index = get_last_log_info().second + 1;
@@ -202,7 +202,7 @@ void Server::as_leader() {
     printf("server[%lu] I' m a leader, term: %lu, log_size[%lu]-last_index[%lu]\n", this->id, this->current_term,this->logs.size(), this->logs.back().index);
 
     for (const auto& [server_id, ptr]: other_server_connections) {
-        thread t(&Server::send_log_heartbeat, this, server_id);
+        thread t(&Raft::send_log_heartbeat, this, server_id);
         t.detach();
     }
 
@@ -215,13 +215,13 @@ void Server::as_leader() {
     }
 }
 
-void Server::start_election_timer() {
+void Raft::start_election_timer() {
     this->election_timer.reset_period(ms(election_timer_base.count() + rand() % election_timer_fluctuate.count()));
     this->election_timer.restart();
 }
 
 /* origin RPC function for debug. */
-std::string Server::Hello(size_t id)  {
+std::string Raft::Hello(size_t id)  {
 
     this->election_timer.restart();
     printf("server[%lu] send Hello\n", id);
@@ -229,14 +229,14 @@ std::string Server::Hello(size_t id)  {
 }
 
 
-void Server::append_logs(const vector<LogEntry>& entries) {
+void Raft::append_logs(const vector<LogEntry>& entries) {
     std::unique_lock<std::shared_mutex> append_logs_lock(this->logs_mutex);
     for (const auto& entry: entries) {
         this->logs.emplace_back(entry);
     }
 }
 
-void Server::send_log_heartbeat(size_t server_id) {
+void Raft::send_log_heartbeat(size_t server_id) {
     const auto& ptr = other_server_connections[server_id];
     while (this->state == State::Leader) {
 

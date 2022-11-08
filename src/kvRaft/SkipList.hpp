@@ -12,6 +12,9 @@
 #include <shared_mutex>
 #include <atomic>
 #include <iostream>
+#include "Raft.hpp"
+
+
 
 using std::cout;
 using std::endl;
@@ -19,6 +22,10 @@ using std::endl;
 /*
  * Skip Node;
  */
+
+constexpr size_t default_max_level = 30;
+
+
 
 //forward declaration.
 template<typename K, typename V>
@@ -32,7 +39,6 @@ using node_ptr = std::shared_ptr<Node<K, V>>;
 
 template<typename K, typename V>
 class Node{
-
 public:
     using node_ptr = std::shared_ptr<Node<K, V>>;
 
@@ -88,11 +94,10 @@ void Node<K, V>::unlink() {
  * Skip list
  */
 template<typename K, typename V>
-class SkipList {
-
+class SkipList: public Raft {
 public:
 
-    SkipList(size_t level);
+    SkipList(size_t id, const string& ip, size_t port, size_t level = default_max_level);
 
     node_ptr<K, V> create_node(const K&, const V&, size_t level);
 
@@ -104,11 +109,20 @@ public:
     std::vector<node_ptr<K, V>> erase_all(const K&);
     std::vector<node_ptr<K, V>> erase_range(const K& lower, const K& upper);
 
+    void print_accumulation() const;
     void print_list() const ;
     void print_level_size() const ;
 
     size_t size() const;
     size_t get_max_level() const;
+
+    void clear();
+public:
+    void apply(const string &command) override;
+
+    void install_snapshot(const string &filename) override;
+
+    void load_snapshot(const string &filename) override;
 
 private:
     node_ptr<K, V> search_ptr(const K&) const;
@@ -140,7 +154,7 @@ node_ptr<K, V> SkipList<K, V>::create_node(const K &k, const V &v, size_t level)
 }
 
 template<typename K, typename V>
-SkipList<K, V>::SkipList(size_t level): max_level_(level), element_count_(0) {
+SkipList<K, V>::SkipList(size_t id, const string& ip, size_t port, size_t level): Raft(id, ip, port), max_level_(level), element_count_(0) {
     //TODO: there is a little issue: k, v can be initialized by default constructor.
     //Solution: Use a Base node that has its default construcor.
     static_assert(std::is_default_constructible<K>(),"The Key type must has default constructor");
@@ -187,20 +201,6 @@ bool SkipList<K, V>::search(const K &k) const {
 }
 
 
-template<typename K, typename V>
-void SkipList<K, V>::print_list() const {
-    /* Read lock */
-    std::shared_lock<std::shared_mutex> sharedLock(m);
-    for (ssize_t i = this->max_level_ - 1; i >= 0; --i) {
-         printf("Level %d : ", i);
-         auto p = this->head_->forward_[i];
-         while (p != nullptr) {
-             std::cout << p->get_value() << ' ';
-             p = p->forward_[i];
-         }
-         std::cout << std::endl;
-     }
-}
 
 template<typename K, typename V>
 void SkipList<K, V>::insert(const K &k, const V &v) {
@@ -323,10 +323,17 @@ size_t SkipList<K, V>::get_random_level() {
 }
 
 
+template<typename K, typename V>
+void SkipList<K, V>::print_accumulation() const {
+    printf("--- max level height: %lu\n", this->get_max_level());
+    printf("--- total element count: %lu\n", this->size());
+}
+
 template<typename  K, typename V>
 void SkipList<K, V>::print_level_size() const {
     /* Read lock */
     std::shared_lock<std::shared_mutex> sharedLock(m);
+    print_accumulation();
     for (ssize_t i = this->max_level_ - 1; i >= 0; --i) {
         int level_size = 0;
         auto p = head_;
@@ -334,9 +341,85 @@ void SkipList<K, V>::print_level_size() const {
             ++level_size;
             p = p->forward_[i];
         }
-        printf("Level %d: size-%d\n", i, level_size);
+        if (level_size != 0) {
+            printf("Level %d: size-%d\n", i, level_size);
+        }
     }
 }
+
+
+template<typename K, typename V>
+void SkipList<K, V>::print_list() const {
+    /* Read lock */
+    std::shared_lock<std::shared_mutex> sharedLock(m);
+    print_accumulation();
+    for (ssize_t i = this->max_level_ - 1; i >= 0; --i) {
+        auto p = this->head_->forward_[i];
+
+        if (p == nullptr) {
+            continue;
+        }
+        printf("Level %d : ", i);
+        while (p != nullptr) {
+            std::cout << p->get_value() << ' ';
+            p = p->forward_[i];
+        }
+        std::cout << std::endl;
+    }
+}
+
+template<typename K, typename V>
+void SkipList<K, V>::apply(const string &command) {
+    static int value = 0;
+    this->insert(value, value++);
+    printf("insert [%d]->[%d]\n", value - 1, value - 1);
+}
+
+template<typename K, typename V>
+void SkipList<K, V>::install_snapshot(const string &filename) {
+
+    print_list();
+    ofstream writer(filename);
+    writer << this->max_level_ << '\n';
+
+    auto ptr = this->head_->forward_[0];
+
+    while (ptr != nullptr) {
+        writer << ptr->level_ << ' ' << ptr->key_ << ' ' << ptr->value_ << '\n';
+        ptr = ptr->forward_[0];
+    }
+    writer.flush();
+    writer.close();
+}
+
+template<typename K, typename V>
+void SkipList<K, V>::load_snapshot(const string &filename) {
+    clear();
+    ifstream reader(filename);
+    reader >> this->max_level_;
+
+    K k;
+    V v;
+    this->head_ = create_node(k, v, max_level_);
+    vector<node_ptr<K, V>> previous_ptrs(this->max_level_, this->head_);
+
+    size_t level;
+    while (reader >> level >> k >> v) {
+        auto node = create_node(k, v, level);
+        for (size_t i = 0; i < level; ++i) {
+            previous_ptrs[i]->forward_[i] = node;
+            previous_ptrs[i] = node;
+        }
+    }
+}
+
+template<typename K, typename V>
+void SkipList<K, V>::clear() {
+    this->head_ = nullptr;
+}
+
+
+
 
 #endif //SKIPLIST_SKIPLIST_H
 

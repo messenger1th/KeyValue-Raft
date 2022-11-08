@@ -1,0 +1,2 @@
+./rmtemp.sh
+./make.sh
