@@ -126,7 +126,15 @@ Other Answer: https://stackoverflow.com/questions/60397950/confusion-about-raft-
 
 ### How does Raft deals with delayed replies in AppendEntries RPC?
 
-https://stackoverflow.com/questions/56677690/how-does-raft-deals-with-delayed-replies-in-appendentries-rpc
+https://stackoverflow.com/questions/56677690/how-does-raft-deals-with-delayed-replies-in-appendentries-rpc 
+
+
+
+## How to make persistent value written atomic ? 
+
+Todo: maybe operating system support.
+
+
 
 
 

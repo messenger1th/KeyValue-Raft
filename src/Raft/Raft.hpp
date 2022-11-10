@@ -409,9 +409,7 @@ private: /* debug part */
     }
 
 
-    std::string get_log_file_name() {
-        return "log" + to_string(this->id) + ".txt";
-    }
+l
 
 
     void write_log(size_t committed_log_start_index, size_t committed_log_end_index) {
