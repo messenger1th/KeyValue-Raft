@@ -1,5 +1,11 @@
 # Raft
 
+Paper: https://raft.github.io/raft.pdf
+
+
+
+
+
 ## Flow
 
 ![image-20221023195122319](./README/image-20221023195122319.png)
@@ -14,43 +20,79 @@ be a follower when set_callback up, steps as follows.
 
 
 
-### Election: As Follower
-
-do nothing but response to RPC request like voting  and append entry and restart election timer every time it receive RPC request from leader or candidate.
 
 
+## Roles
 
-### Election: As Candidate
+Actual, these three are mentioned in Paper.
 
-after being a candidate, steps  as follows.
+### Follower
 
-revert to follower state anytime receives a valid append entry which means a new leader win the vote. 
-
-1. set a voting timer, if election timeout, set_callback a new election.
-2. increase  current  term, otherwise voting request will be rejected.
-3. vote for self
-4. if timeout, restart elec set_callback a new election.
-5. sent `VoteRequest` RPC in parallel, become leader if granted by majority, finish this election before election timer set_callback a new election. 
+* Respond to RPCs from candidates and leaders
+* If election timeout elapses without receiving `AppendEntries` RPC from current leader or granting vote to candidate: convert to candidate
 
 
+
+### Candidate
+
+* On conversion to candidate, start election.
+  * Increment `current_term`
+  * vote for self (**to avoid endless voting.**)
+  * rest election timer
+  * send `request_vote` RPC to all servers.
+
+* if votes received from majority of servers, become leader.
+* if `append_entries` RPC received from new leader: convert to follower. (**make sure its valid leader by log & term check**)
+* if election timeout elapse: start new election.  
+
+
+
+### Leaders
+
+* Upon election: send initial empty append_entries RPCs(heartbeat) to each server; repeat idle periods to prevent election timeouts.
+* If command received from client: append entry to local log, respond after entry applied to state machine. (**Respond after applied to state machine means its committed, would recovery from disk if server crash**)
+* If `last_log_index >= next_index` for a follower: send append_entries RPC with log entries starting at `next_index`
+  * If successful: update `next_index` and `match_index` for follower. (**Difference between `next_index` and `match_index`**)
+  * If `append_entries` fails because of log inconsistency: decrement next_index and retry. (**This can be optimized: follower telling leader the concrete  consistent log index rather than try to avoid multi network delay.)**
+* If there exists an N such that `N > commit_index`, a majority of `match_index[u] >= N`, and `log[N].term == current_term`. (**Notice: `log[N].term == current_term` is very necessary. see Figure 8 in Paper.**)
+
+
+
+## Special Condition
 
 ### Restart From Crash
 
-#### Restart: As Follower
+start from a follower no matter what' s server's state.
 
-#### Restart: As Candidate
-
-#### Restart: As Leader
-
-
-
-### Add a new Server into Cluster
+everything Just like Starts up.
 
 
 
 
 
-## Optimize
+### Member change 
+
+TODO: no code implementation.
+
+
+
+
+
+## Implementation
+
+### Structure
+
+#### Timer Structure
+
+
+
+
+
+### Optimize
+
+*  follower telling leader the concrete  consistent log index rather than try to avoid multi network delay
+
+  
 
 ### Snapshot
 
@@ -60,6 +102,10 @@ revert to follower state anytime receives a valid append entry which means a new
 
 
 ## Details not Mentioned in Paper
+
+### What's the difference of `last_applied`, `commit_index`, `next_index`, `last_log_index`？
+
+
 
 ### When to set `voteFor` to `null` ? 
 
@@ -77,7 +123,7 @@ Yes, as mentioned above, anytime leader receive a term higher than its current t
 
 Link: https://stackoverflow.com/questions/71230789/raft-will-term-increasing-all-the-time-if-partitioned
 
-
+a way to avoid this is to use 2-phase Request-Vote. 
 
 
 
@@ -108,7 +154,7 @@ Link: [Raft Q&A](https://thesquareplanet.com/blog/raft-qa/)
 
 
 
-### Should a leader hold a timer? 
+### Should a leader hold a timer and step down if timeout or in some special condition? 
 
 
 
@@ -124,7 +170,7 @@ Other Answer: https://stackoverflow.com/questions/60397950/confusion-about-raft-
 
 
 
-### How does Raft deals with delayed replies in AppendEntries RPC?
+### How does Raft deals with delayed replies in `AppendEntries` RPC?
 
 https://stackoverflow.com/questions/56677690/how-does-raft-deals-with-delayed-replies-in-appendentries-rpc 
 
