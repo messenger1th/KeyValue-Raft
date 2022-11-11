@@ -150,6 +150,8 @@ AppendResult Raft::append_entries(size_t term, size_t leader_id, size_t prev_log
     }
 
     res.success = true;
+    this->state = State::Follower;
+    
     printf("sLeader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term, res.success);
     return res;
 }
