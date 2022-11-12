@@ -196,11 +196,13 @@ private:
     }
 
     void be_follower() {
-        if (this->state != State::Follower) {
-            this->state = State::Follower;
-            start_election_timer();
-        } else {
-            this->election_timer.restart();
+        switch(this->state) {
+            case State::Follower: this->election_timer.restart(); break;
+            case State::Candidate: this->election_timer.restart(); break;
+            case State::Leader: {
+                start_election_timer();
+            }; break;
+            default: throw runtime_error("Server has no such state.");
         }
     }
 
