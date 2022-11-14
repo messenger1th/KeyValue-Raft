@@ -54,6 +54,9 @@ struct VoteResult {
 struct AppendResult {
     size_t term{0};
     bool success{false};
+    size_t expect_index{0};
+    AppendResult() = default;
+    AppendResult(size_t term, bool success, size_t expect_index): term(term), success(success), expect_index(expect_index) {}
 };
 
 class NetAddress{

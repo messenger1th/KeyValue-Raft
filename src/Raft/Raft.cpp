@@ -113,7 +113,7 @@ VoteResult Raft::request_vote(size_t term, size_t candidate_id, size_t last_log_
 
 AppendResult Raft::append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term,
                                   const string &entries, size_t leader_commit) {
-    AppendResult res{this->current_term, false};
+    AppendResult res{this->current_term, false, this->get_last_log_index() + 1};
     if (this->current_term > term) {
         printf("1Leader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term,res.success);
         return res;
@@ -286,8 +286,8 @@ void Raft::send_log_heartbeat(size_t server_id) {
         } else {
             /* decrement nextIndex and retry; */
             if (append_result.term != 0) {
-                printf("server[%lu]: inconsistency!\n", server_id);
-                next_index[server_id] -= 1;
+                printf("server[%lu]: inconsistency! expect_index: %lu \n ", server_id, append_result.expect_index);
+                next_index[server_id] = min(next_index[server_id] - 1, append_result.expect_index);
                 assert(next_index[server_id] > 0);
                 continue;
             } else {
