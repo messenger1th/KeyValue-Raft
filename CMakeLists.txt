@@ -8,7 +8,6 @@ include_directories(src/Timer)
 include_directories(src/Raft)
 
 add_subdirectory(src/TinyRPC TinyRPC)
-add_subdirectory(src/MapReduce MapReduce)
 add_subdirectory(src/Timer Timer)
 add_subdirectory(src/Raft Raft)
 add_subdirectory(src/kvRaft kvRaft)
