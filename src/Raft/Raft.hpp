@@ -127,11 +127,11 @@ private:
     }
 
     string get_snapshot_filename() {
-        return "snapshot" + to_string(this->id) + ".txt";
+        return "snapshot/snapshot" + to_string(this->id) + ".txt";
     }
 
     string  get_last_include_info_filename() {
-        return "last_include_info" + to_string(this->id) + ".txt" ;
+        return "last_include_info/last_include_info" + to_string(this->id) + ".txt" ;
     }
 
     void write_last_include_index(size_t last_include_term, size_t last_include_index) {
@@ -139,6 +139,14 @@ private:
         ofstream writer(filename);
         writer << last_include_term << " " << last_include_index;
         writer.close();
+    }
+    //todo: help function
+    void print_log() {
+        printf("log: ");
+        for (const auto log: logs) {
+            cout << log.index << " ";
+        }
+        cout << endl;
     }
 
 private: /* Data mentioned in paper. */
@@ -185,6 +193,7 @@ private: /* extra information*/
     /* leader unique */
     unordered_map<size_t, size_t> next_index;
     unordered_map<size_t, atomic<size_t>> match_index;
+    std::atomic<size_t> match_index_increments{0};
 
 private:
 
@@ -206,7 +215,9 @@ private:
         }
     }
 
+
     void send_log_heartbeat(size_t server_id);
+
 
 
     inline size_t cluster_size() {
@@ -260,12 +271,13 @@ private: /* debug part */
     }
 
     size_t find_match_index_median() {
-        int l = min_element(match_index.begin(), match_index.end(), [] (const auto& p1, const auto& p2) ->bool {
-            return p1.second < p2.second;
-        })->second;
-        int r = max_element(match_index.begin(), match_index.end(), [] (const auto& p1, const auto& p2) ->bool {
-            return p1.second < p2.second;
-        })->second;
+        int l;
+        {
+            std::unique_lock<std::mutex> read_commit_lock(this->commit_index_mutex);
+            l = this->commit_index;
+        }
+
+        int r = get_last_log_index();
         if (l == r) {
             return l;
         }
@@ -313,6 +325,16 @@ private: /* debug part */
             }
         }
         return commands;
+    }
+
+    size_t get_last_log_index() {
+        std::shared_lock<std::shared_mutex> get_last_log_index(this->logs_mutex);
+        return this->logs.back().index;
+    }
+
+    size_t get_last_log_term() {
+        std::shared_lock<std::shared_mutex> get_last_log_index(this->logs_mutex);
+        return this->logs.back().term;
     }
 
     size_t get_log_term(size_t index) {
@@ -381,7 +403,7 @@ private: /* debug part */
     }
 
     std::string get_term_info_file_name() {
-        return "term_info" + to_string(this->id) + ".txt";
+        return "term_info/term_info" + to_string(this->id) + ".txt";
     }
 
     void update_term_info(size_t term, size_t vote_for) {
@@ -412,12 +434,13 @@ private: /* debug part */
 
 
     string get_log_file_name() {
-        return "log" + to_string(this->id) + ".txt";
+        return "log/log" + to_string(this->id) + ".txt";
     }
 
 
     void write_log(size_t committed_log_start_index, size_t committed_log_end_index) {
         const string file_name = get_log_file_name();
+
         ofstream log_writer(file_name, ifstream::app);
         {
             std::unique_lock<std::shared_mutex> write_log_lock(this->logs_mutex);

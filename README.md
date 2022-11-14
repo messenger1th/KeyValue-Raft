@@ -3,7 +3,7 @@
 ## Prerequisite
 
 * Timer: [Callback-Timer](https://github.com/messenger1th/Callback-Timer)
-* RPC: Third-Part [buttonrpc](https://github.com/button-chen/buttonrpc_cpp14) 
+* RPC: Third-Party [buttonrpc](https://github.com/button-chen/buttonrpc_cpp14) 
 * State Machine: [Key-Value DataBase](https://github.com/messenger1th/SkipList)
 
 ## Flow
@@ -218,4 +218,4 @@ Todo: maybe operating system support.
 ### FAQ Links
 
 1. https://thesquareplanet.com/blog/raft-qa/
-2. > [Why Raft never commits log entries from previous terms by counting replicas](https://stackoverflow.com/questions/60397950/confusion-about-raft-algorithm)
+2. [Why Raft never commits log entries from previous terms by counting replicas](https://stackoverflow.com/questions/60397950/confusion-about-raft-algorithm)

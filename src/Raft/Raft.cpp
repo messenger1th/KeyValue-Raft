@@ -142,9 +142,10 @@ AppendResult Raft::append_entries(size_t term, size_t leader_id, size_t prev_log
     auto appending_entries = parse_string_logs(entries);
     append_logs(appending_entries);
 
+
     /* Step5: If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry) */
     if (leader_commit > commit_index) {
-        update_commit_index(leader_commit);
+        update_commit_index(std::min(leader_commit, this->get_last_log_index()));
         //TODO: notify to apply to state machine after commit.
 
     }
@@ -240,6 +241,8 @@ void Raft::append_logs(const vector<LogEntry>& entries) {
     }
 }
 
+
+
 void Raft::send_log_heartbeat(size_t server_id) {
     const auto& ptr = other_server_connections[server_id];
     while (this->state == State::Leader) {
@@ -259,15 +262,27 @@ void Raft::send_log_heartbeat(size_t server_id) {
 
         if (append_result.success) {
             next_index[server_id] += send_log_size;
+            size_t previous_match_index = match_index[server_id];
             match_index[server_id] = prev_log_index + send_log_size;
+
             printf("Term[%lu] Send append_entry to %lu, Response: %d , next_index: [%lu], matchIndex[%lu]\n", this->current_term, server_id, append_result.success, next_index[server_id], match_index[server_id].load());
-            if (match_index[server_id] > commit_index) {
-                size_t new_commit_index = find_match_index_median();
-                /* only commit log in its term. */
-                if (this->get_log_term(new_commit_index) == this->current_term) {
-                    update_commit_index(new_commit_index);
+            printf("previous_match_index[%lu]: %lu, this->commit_index: %lu, match_index[%lu]: %lu\n", server_id, previous_match_index, this->commit_index, server_id, match_index[server_id].load());
+            if (previous_match_index <= this->commit_index && match_index[server_id] >= this->commit_index) {
+                this->match_index_increments += send_log_size;
+                if (this->match_index_increments >= majority_count / 2) {
+                    this->match_index_increments = this->match_index_increments % (majority_count / 2);
+                    size_t new_commit_index = find_match_index_median();
+                    /* only commit log in its term. */
+                    if (this->get_log_term(new_commit_index) == this->current_term) {
+//                        cout << "update commit index" << endl;
+                        update_commit_index(new_commit_index);
+                    }
                 }
+            } else {
+                this->match_index_increments += send_log_size;
             }
+
+
         } else {
             /* decrement nextIndex and retry; */
             if (append_result.term != 0) {

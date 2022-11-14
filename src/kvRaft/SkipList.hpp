@@ -372,7 +372,7 @@ template<typename K, typename V>
 void SkipList<K, V>::apply(const string &command) {
     static int value = 0;
     this->insert(value, value++);
-    printf("insert [%d]->[%d]\n", value - 1, value - 1);
+//    printf("insert [%d]->[%d]\n", value - 1, value - 1);
 }
 
 template<typename K, typename V>

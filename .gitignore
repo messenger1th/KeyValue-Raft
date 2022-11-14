@@ -9,8 +9,7 @@ bin/
 .idea/*
 
 #temp file: logs or snapshot
-term_info?.txt
-log?.txt
-last_include_info?.txt
-snapshot?.txt
-
+log/log?.txt
+term_info/term_info?.txt
+snapshot/snapshot?.txt
+last_include_info/last_include_info?.txt
