@@ -218,4 +218,4 @@ Todo: maybe operating system support.
 ### FAQ Links
 
 1. https://thesquareplanet.com/blog/raft-qa/
-2. [Why Raft never commits log entries from previous terms by counting replicas](https://stackoverflow.com/questions/60397950/confusion-about-raft-algorithm)
+2. > [Why Raft never commits log entries from previous terms by counting replicas](https://stackoverflow.com/questions/60397950/confusion-about-raft-algorithm)
