@@ -6,6 +6,7 @@ build-vs2015/buttonrpc-demo/buttonrpc-demo.VC.db
 cmake-build-*/
 build/
 bin/
+.idea/*
 
 #temp file: logs or snapshot
 term_info?.txt
