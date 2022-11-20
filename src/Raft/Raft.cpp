@@ -135,6 +135,7 @@ AppendResult Raft::append_entries(size_t term, size_t leader_id, size_t prev_log
     if (log_conflict(prev_log_index, prev_log_term)) {
         printf("Server[%lu]: Log[%lu] Conflicts \n", this->id, prev_log_term);
         remove_conflict_logs(prev_log_index);
+        rewrite_log();
     }
 
 
@@ -147,12 +148,10 @@ AppendResult Raft::append_entries(size_t term, size_t leader_id, size_t prev_log
     if (leader_commit > commit_index) {
         update_commit_index(std::min(leader_commit, this->get_last_log_index()));
         //TODO: notify to apply to state machine after commit.
-
     }
 
     res.success = true;
     this->state = State::Follower;
-
     printf("sLeader[%lu] append-term[%lu]-prev_log_index[%lu]-term[%lu], my-log-term[%lu]-index[%lu]-return term[%lu]-success[%d]\n", leader_id, term, prev_log_index, prev_log_term, logs.back().term, logs.back().index, res.term, res.success);
     return res;
 }
@@ -235,10 +234,16 @@ std::string Raft::Hello(size_t id)  {
 
 
 void Raft::append_logs(const vector<LogEntry>& entries) {
-    std::unique_lock<std::shared_mutex> append_logs_lock(this->logs_mutex);
-    for (const auto& entry: entries) {
-        this->logs.emplace_back(entry);
+    size_t last_index, current_index;
+    {
+        std::unique_lock<std::shared_mutex> append_logs_lock(this->logs_mutex);
+        last_index = this->logs.back().index;
+        for (const auto& entry: entries) {
+            this->logs.emplace_back(entry);
+        }
+        current_index = this->logs.back().index;
     }
+    write_append_log(last_index, current_index);
 }
 
 
@@ -281,8 +286,6 @@ void Raft::send_log_heartbeat(size_t server_id) {
             } else {
                 this->match_index_increments += send_log_size;
             }
-
-
         } else {
             /* decrement nextIndex and retry; */
             if (append_result.term != 0) {

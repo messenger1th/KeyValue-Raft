@@ -138,18 +138,13 @@ private:
     }
 
     void write_last_include_index(size_t last_include_term, size_t last_include_index) {
+        //TODO: make this two steps:
+        // 1. write to temp file
+        // 2. rename temp file to real file.
         const string filename = get_last_include_info_filename();
         ofstream writer(filename);
         writer << last_include_term << " " << last_include_index;
         writer.close();
-    }
-    //todo: help function
-    void print_log() {
-        printf("log: ");
-        for (const auto log: logs) {
-            cout << log.index << " ";
-        }
-        cout << endl;
     }
 
 private: /* Data mentioned in paper. */
@@ -248,7 +243,6 @@ private: /* debug part */
         {
             std::unique_lock<std::mutex> lock(this->commit_index_mutex);
             if (value > this->commit_index) {
-                write_log(this->commit_index + 1, value + 1);
                 this->commit_index = value;
                 should_notify = true;
             }
@@ -259,8 +253,14 @@ private: /* debug part */
     }
 
     void append_log_simulate() {
-        std::unique_lock<std::shared_mutex> lock(logs_mutex);
-        this->logs.emplace_back(this->current_term, this->logs.back().index + 1, "Hello");
+        size_t start, end;
+        {
+            std::unique_lock<std::shared_mutex> lock(logs_mutex);
+            start = this->logs.back().index + 1;
+            this->logs.emplace_back(this->current_term, this->logs.back().index + 1, "Hello");
+            end = this->logs.back().index + 1;
+        }
+        write_append_log(start, end);
     }
 
     bool find_match_index_median_check(size_t mid) {
@@ -375,8 +375,7 @@ private: /* debug part */
 
 
     bool snapshot_condition() {
-        //TODO: change the principle of install snapshot.
-
+        //TODO: optimize the principle of install snapshot.
         return this->last_applied > 0 &&  this->last_applied % 10 == 0;
     }
 
@@ -398,7 +397,9 @@ private: /* debug part */
             }
             this->last_applied += commands.size();
             if (snapshot_condition()) {
-                //TODO: actual should write a temp file until the total writing task done, then change it to correct name.
+                //TODO: make rewrite log two steps:
+                // 1. write to temp file
+                // 2. rename temp file to real file.
                 this->install_snapshot(get_snapshot_filename());
                 write_last_include_index(this->get_log_term(this->last_applied), this->last_applied);
             }
@@ -417,6 +418,9 @@ private: /* debug part */
 
 
     void write_term_info(size_t term, size_t vote_for) {
+        //TODO: make rewrite log two steps:
+        // 1. write to temp file 
+        // 2. rename temp file to real file.
         const string file_name = get_term_info_file_name();
         ofstream log_writer(file_name);
         {
@@ -441,14 +445,25 @@ private: /* debug part */
     }
 
 
-    void write_log(size_t committed_log_start_index, size_t committed_log_end_index) {
+    void rewrite_log() {
+        //TODO: make rewrite log two steps:
+        // 1. write to temp file
+        // 2. rename temp file to real file.
+        size_t last_include_index = this->get_last_include_info(get_last_include_info_filename()).second;
+        std::ofstream clean_text(get_log_file_name(), std::ofstream::out | std::ofstream::trunc);
+        clean_text.close();
+        write_append_log(last_include_index + 1, this->get_last_log_index() + 1);
+    }
+
+    void write_append_log(size_t committed_log_start_index, size_t committed_log_end_index) {
         const string file_name = get_log_file_name();
 
         ofstream log_writer(file_name, ifstream::app);
         {
-            std::unique_lock<std::shared_mutex> write_log_lock(this->logs_mutex);
+            std::shared_lock<std::shared_mutex> write_log_lock(this->logs_mutex);
             size_t start_index = get_index(committed_log_start_index);
             size_t end_index = get_index(committed_log_end_index);
+            //append write is atomic.
             for (size_t i = start_index; i < end_index; ++i) {
                 log_writer << logs[i];
             }
