@@ -303,7 +303,8 @@ void Raft::send_log_heartbeat(size_t server_id) {
 
 
 ostream& operator<<(ostream& out, const LogEntry& entry) {
-    out << entry.term << ' ' << entry.index << ' ' << entry.command << endl;
+    string oneline = to_string(entry.term) + ' ' + to_string(entry.index) + ' ' + entry.command + '\n';
+    out.write(oneline.c_str(), oneline.size());
     return out;
 }
 

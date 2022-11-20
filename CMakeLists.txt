@@ -13,8 +13,6 @@ add_subdirectory(src/Raft Raft)
 add_subdirectory(src/kvRaft kvRaft)
 
 
-add_definitions(-w)
-
 
 #target_include_directories(client PUBLIC
 #        "${PROJECT_BINARY_DIR}"

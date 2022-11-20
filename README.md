@@ -29,6 +29,10 @@ be a follower when set_callback up, steps as follows.
 * Respond to RPCs from candidates and leaders
 * If election timeout elapses without receiving `AppendEntries` RPC from current leader or granting vote to candidate: convert to candidate
 
+
+
+**Architecture**
+
 ![image-20221112125716307](./README/image-20221112125716307.png)
 
 
@@ -49,7 +53,7 @@ be a follower when set_callback up, steps as follows.
 
 
 
-**Structure**
+**Architecture**
 
 ![image-20221112125817482](./README/image-20221112125817482.png)
 
@@ -66,7 +70,7 @@ be a follower when set_callback up, steps as follows.
 
 
 
-**Structure**
+**Architecture**
 
 ![image-20221112130158354](./README/image-20221112130158354.png)
 
@@ -197,11 +201,11 @@ https://stackoverflow.com/questions/56677690/how-does-raft-deals-with-delayed-re
 
 
 
-**How to make persistent value written atomic ?** 
+**How to make persistent value written atomic ?**
 
-Todo: maybe operating system support.
+write file and rename it.
 
-
+rename and move operation are atomic.
 
 
 
@@ -218,4 +222,4 @@ Todo: maybe operating system support.
 ### FAQ Links
 
 1. https://thesquareplanet.com/blog/raft-qa/
-2. [Why Raft never commits log entries from previous terms by counting replicas](https://stackoverflow.com/questions/60397950/confusion-about-raft-algorithm)
+2. [Why Raft never commits log entries from previous terms by counting replicas](https://stackoverflow.com/questions/60397950/confusion-about-raft-algorithm)s
