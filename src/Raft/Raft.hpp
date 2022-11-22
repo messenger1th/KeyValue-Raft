@@ -10,12 +10,14 @@
 #include <string>
 #include <shared_mutex>
 
+//todo: find a posix fork function rather than Linux unique.
+#include <unistd.h>
+
 #include "Timer.hpp"
 #include "buttonrpc.hpp"
 
 /* debug */
 #include <iostream>
-#include <queue>
 #include <fstream>
 
 
@@ -397,11 +399,18 @@ private: /* debug part */
             }
             this->last_applied += commands.size();
             if (snapshot_condition()) {
-                //TODO: make rewrite log two steps:
-                // 1. write to temp file
-                // 2. rename temp file to real file.
-                this->install_snapshot(get_snapshot_filename());
-                write_last_include_index(this->get_log_term(this->last_applied), this->last_applied);
+                auto ret = fork();
+                if (ret == -1) {
+                    throw runtime_error("fork error ! ");
+                } else if (ret == 0) { //Copy-On-Write: make child process install snapshot.
+                    //TODO: make rewrite log two steps:
+                    // 1. write to temp file
+                    // 2. rename temp file to real file.
+
+                    //TODO: use PIC to avoid more than one process install snapshot.
+                    this->install_snapshot(get_snapshot_filename());
+                    write_last_include_index(this->get_log_term(this->last_applied), this->last_applied);
+                }
             }
         }
     }
