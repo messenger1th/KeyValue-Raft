@@ -72,7 +72,7 @@ candidate[2] is calling request_vote, term[1], last_log-term[0]-index[0]
 
 ## Make Your Distributed System
 
-In Raft class, there are three virtual method, just inherit these to make your Distributed System.
+In Raft class, there are three virtual method, just inherit Raft class and override these to make your Distributed System.
 
 ```cpp
 class Raft {
