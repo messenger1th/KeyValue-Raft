@@ -56,7 +56,7 @@ void Raft::configure() {
     printf("---- Configuring... \n");
     load_persistent_value(); /* load persistent value from log. */
     set_default_value();     /* set default config. */
-    election_timer.set_callback(&Raft::as_candidate, this); /* set election callback function. */
+    election_timer.set_callback(&Raft::become_candidate, this); /* set election callback function. */
     thread apply_thread(&Raft::apply_state_machine, this);
     apply_thread.detach();
     printf("---- Configuring done!\n");
@@ -64,7 +64,7 @@ void Raft::configure() {
 
 
 /* will block here*/
-void Raft::start_serve() {
+void Raft::start_service() {
     configure();
 
     buttonrpc server_rpc;
@@ -93,8 +93,7 @@ VoteResult Raft::request_vote(size_t term, size_t candidate_id, size_t last_log_
     }
 
     /* 2. Reply false, if votedFor is not null or candidateId, */
-    if (this->
-    vote_for != null && this->vote_for != candidate_id) {
+    if (this->vote_for != null && this->vote_for != candidate_id) {
         return res;
     }
 
@@ -157,7 +156,7 @@ AppendResult Raft::append_entries(size_t term, size_t leader_id, size_t prev_log
     return res;
 }
 
-void Raft::as_candidate() {
+void Raft::become_candidate() {
 
     /* steps after being a candidate */
     this->state = State::Candidate; //change state.
@@ -187,13 +186,13 @@ void Raft::as_candidate() {
 
     if (vote_count >= majority_count && this->state == State::Candidate) {
         this->state = State::Leader;
-        as_leader();
+        become_leader();
     } else {
-        be_follower();
+        become_follower();
     }
 }
 
-void Raft::as_leader() {
+void Raft::become_leader() {
     /* stop election_timer  */
     election_timer.stop();
     auto next_log_index = get_last_log_info().second + 1;
@@ -214,6 +213,7 @@ void Raft::as_leader() {
     printf("send threads created. simulated log append. \n");
 
     //TODO: delete it after developed client.
+    // simulate client request.
     while (this->state == State::Leader) {
         append_log_simulate();
         std::this_thread::sleep_for(std::chrono::milliseconds(delay / 3 * 2));
@@ -280,7 +280,6 @@ void Raft::send_log_heartbeat(size_t server_id) {
                     size_t new_commit_index = find_match_index_median();
                     /* only commit log in its term. */
                     if (this->get_log_term(new_commit_index) == this->current_term) {
-//                        cout << "update commit index" << endl;
                         update_commit_index(new_commit_index);
                     }
                 }

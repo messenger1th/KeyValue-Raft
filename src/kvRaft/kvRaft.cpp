@@ -16,7 +16,7 @@ int main(int argc, const char** argv) {
     port += id;
 
     SkipList<int, int> kvRaft(id, ip, port);
-    kvRaft.start_serve();
+    kvRaft.start_service();
 
     return 0;
 }

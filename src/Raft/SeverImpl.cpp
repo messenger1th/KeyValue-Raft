@@ -14,7 +14,7 @@ int main(int argc, char* argv[]) {
     port += id;
 
     Raft s(id, ip, port);
-    s.start_serve();
+    s.start_service();
 
     return 0;
 }

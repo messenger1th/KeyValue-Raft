@@ -75,7 +75,7 @@ class Raft {
 public:
     enum class State {Follower, Candidate, Leader};
 
-    /*format: ip:port, like "127.0.0.1:5555" */
+    /* format: ip:port, like "127.0.0.1:5555" */
     Raft(size_t id, const std::string &pair);
     Raft(size_t id, const std::string &IP, const size_t &port);
 
@@ -84,15 +84,15 @@ public:
     VoteResult request_vote(size_t term, size_t candidate_id, size_t last_log_index, size_t last_log_term);
     AppendResult append_entries(size_t term, size_t leader_id, size_t prev_log_index, size_t prev_log_term, const string &entries, size_t leader_commit);
 
-    void as_candidate();    /* be a candidate */
-    void as_leader();    /* be a leader */
+    void become_candidate();    /* be a candidate */
+    void become_leader();    /* be a leader */
 
     /* configuring function before start serve */
     void configure();
     void load_persistent_value();
     void load_connection_configuration();
     void set_default_value();
-    void start_serve();
+    void start_service();
 
 
     /* application layer */
@@ -201,10 +201,10 @@ private:
     void update_current_term(size_t term) {
         /* write log before change term; */
         update_term_info(term, null);
-        be_follower();
+        become_follower();
     }
 
-    void be_follower() {
+    void become_follower() {
         switch(this->state) {
             case State::Follower: this->election_timer.restart(); break;
             case State::Candidate: this->election_timer.restart(); break;
